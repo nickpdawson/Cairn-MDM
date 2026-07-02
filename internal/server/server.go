@@ -26,12 +26,14 @@ type Server struct {
 	cfg   config.Config
 	log   *slog.Logger
 	ready Readiness
+	mdm   http.Handler
 	mux   *http.ServeMux
 }
 
-// New builds a Server and registers routes.
-func New(cfg config.Config, log *slog.Logger, ready Readiness) *Server {
-	s := &Server{cfg: cfg, log: log, ready: ready, mux: http.NewServeMux()}
+// New builds a Server and registers routes. mdm is the NanoMDM check-in/command
+// handler; if nil, the /mdm route is not mounted (Phase 0 behaviour).
+func New(cfg config.Config, log *slog.Logger, ready Readiness, mdm http.Handler) *Server {
+	s := &Server{cfg: cfg, log: log, ready: ready, mdm: mdm, mux: http.NewServeMux()}
 	s.routes()
 	return s
 }
@@ -45,6 +47,13 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /healthz", s.handleHealthz)
 	s.mux.HandleFunc("GET /readyz", s.handleReadyz)
 	s.mux.HandleFunc("GET /version", s.handleVersion)
+
+	if s.mdm != nil {
+		// Apple devices PUT check-in and command results to this single path.
+		// Mount without a method restriction and let NanoMDM's handler decide;
+		// the pattern has no method token so all methods match.
+		s.mux.Handle(s.cfg.Server.MDMPath, s.mdm)
+	}
 }
 
 // handleHealthz reports process liveness — it never touches dependencies.

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/dzsec/cairn/internal/config"
+	"github.com/dzsec/cairn/internal/mdmcore"
 	"github.com/dzsec/cairn/internal/server"
 	"github.com/dzsec/cairn/internal/storage/sqlite"
 	"github.com/dzsec/cairn/internal/version"
@@ -40,13 +41,18 @@ func runServe(ctx context.Context, args []string) error {
 	defer db.Close()
 	log.Info("storage ready", "driver", cfg.Storage.Driver, "path", cfg.Storage.Path)
 
+	// Assemble the embedded NanoMDM service over our storage.
+	nanoStore := db.NanoStorage(log)
+	core := mdmcore.New(nanoStore, mdmcore.NewLogAdapter(log))
+	log.Info("mdm service ready", "path", cfg.Server.MDMPath)
+
 	// TLS beyond plaintext proxy mode arrives in Phase 2; fail loudly rather
 	// than silently serving cleartext where TLS was requested.
 	if cfg.Server.TLS.Mode != config.TLSProxy {
 		return fmt.Errorf("tls.mode %q not yet implemented (Phase 2); use tls.mode=proxy behind a terminating reverse proxy for now", cfg.Server.TLS.Mode)
 	}
 
-	srv := server.New(cfg, log, db)
+	srv := server.New(cfg, log, db, core.Handler())
 	httpSrv := &http.Server{
 		Addr:              cfg.Server.Listen,
 		Handler:           srv.Handler(),
