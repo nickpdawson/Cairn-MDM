@@ -19,6 +19,7 @@ require (
 	github.com/go-logfmt/logfmt v0.5.1 // indirect
 	github.com/go-stack/stack v1.6.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
+	github.com/gorilla/context v0.0.0-20160226214623-1ea25387ff6f // indirect
 	github.com/gorilla/mux v1.4.0 // indirect
 	github.com/groob/finalizer v0.0.0-20170707115354-4c2ed49aabda // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
@@ -28,6 +29,7 @@ require (
 	golang.org/x/crypto v0.33.0 // indirect
 	golang.org/x/net v0.34.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 	modernc.org/libc v1.55.3 // indirect
 	modernc.org/mathutil v1.6.0 // indirect
 	modernc.org/memory v1.8.0 // indirect

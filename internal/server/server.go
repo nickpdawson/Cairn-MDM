@@ -24,8 +24,9 @@ type Readiness interface {
 // Deps are the optional subsystem handlers the server mounts. A nil handler is
 // simply not mounted.
 type Deps struct {
-	MDM  http.Handler // NanoMDM check-in/command handler (mounted at mdm_path)
-	SCEP http.Handler // embedded-CA SCEP handler (mounted at /scep)
+	MDM    http.Handler // NanoMDM check-in/command handler (mounted at mdm_path)
+	SCEP   http.Handler // embedded-CA SCEP handler (mounted at /scep)
+	Enroll http.Handler // enrollment profile handler (mounted at /enroll)
 }
 
 // Server holds the mux and its dependencies.
@@ -67,6 +68,10 @@ func (s *Server) routes() {
 		// as well so a trailing slash still routes.
 		s.mux.Handle("/scep", s.deps.SCEP)
 		s.mux.Handle("/scep/", s.deps.SCEP)
+	}
+
+	if s.deps.Enroll != nil {
+		s.mux.Handle("GET /enroll", s.deps.Enroll)
 	}
 }
 

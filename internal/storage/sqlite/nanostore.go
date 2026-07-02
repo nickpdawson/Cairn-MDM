@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"io"
 	"log/slog"
 
 	"github.com/micromdm/nanolib/storage/kv/kvtxn"
@@ -19,6 +20,9 @@ import (
 // the scale Cairn targets. A future backend can implement native SQLite
 // transactions if a larger deployment needs stronger guarantees.
 func (db *DB) NanoStorage(log *slog.Logger) storage.AllStorage {
+	if log == nil {
+		log = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
 	bucket := func(name string) *kvBucket {
 		return &kvBucket{db: db.sql, name: name, log: log}
 	}

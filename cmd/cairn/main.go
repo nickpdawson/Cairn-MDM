@@ -44,6 +44,10 @@ func main() {
 		err = runServe(ctx, args)
 	case "migrate":
 		err = runMigrate(ctx, args)
+	case "pushcert":
+		err = runPushcert(ctx, args)
+	case "enqueue":
+		err = runEnqueue(ctx, args)
 	case "version", "-v", "--version":
 		fmt.Println(version.Info())
 	case "help", "-h", "--help":
@@ -69,6 +73,8 @@ Usage:
 Commands:
   serve      run the MDM server
   migrate    apply database migrations and exit
+  pushcert   manage the APNs push certificate (import)
+  enqueue    queue a command for a device and push
   version    print build information
   help       show this help
 

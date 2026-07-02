@@ -11,7 +11,9 @@ import (
 
 	"github.com/dzsec/cairn/internal/ca"
 	"github.com/dzsec/cairn/internal/config"
+	"github.com/dzsec/cairn/internal/enroll"
 	"github.com/dzsec/cairn/internal/mdmcore"
+	"github.com/dzsec/cairn/internal/push"
 	"github.com/dzsec/cairn/internal/server"
 	"github.com/dzsec/cairn/internal/storage/sqlite"
 	"github.com/dzsec/cairn/internal/version"
@@ -68,6 +70,18 @@ func runServe(ctx context.Context, args []string) error {
 		}
 		deps.SCEP = scepHandler
 		log.Info("embedded CA ready", "scep_path", "/scep", "ca_cn", authority.Certificate().Subject.CommonName)
+
+		// Enrollment profile handler (embedded-CA mode). External-CA mode wires
+		// its own SCEP URL/challenge in a later phase.
+		deps.Enroll = enroll.New(enroll.Config{
+			Organization:  "cairn." + host,
+			CADER:         authority.Certificate().Raw,
+			SCEPURL:       cfg.Server.PublicURL + "/scep",
+			Challenge:     cfg.CA.External.Challenge,
+			MDMServerURL:  cfg.Server.PublicURL + cfg.Server.MDMPath,
+			SubjectPrefix: "devices." + host,
+		}, db, push.SettingTopic, log)
+		log.Info("enrollment endpoint ready", "path", "/enroll")
 	}
 
 	// TLS beyond plaintext proxy mode arrives in Phase 2; fail loudly rather
