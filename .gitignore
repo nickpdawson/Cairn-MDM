@@ -1,0 +1,27 @@
+# Secrets & key material — never commit these (v1's mistake).
+*.key
+*.keytab
+*.p12
+*.pem
+*.crt
+*.csr
+# Allow documentation examples explicitly.
+!docs/examples/*.example
+
+# Local databases & state.
+*.db
+*.db-shm
+*.db-wal
+/data/
+/dist/
+
+# Local config (may reference secret file paths).
+cairn.toml
+.env
+.env.*
+
+# Go / editor cruft.
+/cairn
+*.test
+*.out
+.DS_Store

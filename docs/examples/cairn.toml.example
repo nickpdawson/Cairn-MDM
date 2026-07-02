@@ -1,0 +1,50 @@
+# Cairn configuration — example.
+#
+# Copy to your platform's config path (e.g. /etc/cairn/cairn.toml) and edit.
+# Secrets are NEVER inlined here: every secret field has a *_file / *_env
+# companion. Point those at a file (mode 0600) or an environment variable.
+
+[server]
+# Externally-reachable base URL. Drives the MDM ServerURL/CheckInURL, the SCEP
+# URL, and enrollment links. Must match what devices are enrolled against.
+public_url = "https://mdm.example.com"
+listen = ":443"
+mdm_path = "/mdm"
+
+[server.tls]
+# acme  — built-in Let's Encrypt (default; needs public DNS + reachable :80/:443)
+# files — bring your own cert/key (internal CA, DigiCert, etc.)
+# proxy — plaintext behind a terminating reverse proxy
+mode = "acme"
+acme_email = "admin@example.com"
+# acme_cache_dir = "/var/db/cairn/acme"
+
+# mode = "files"
+# cert_file = "/etc/cairn/tls/mdm.crt"
+# key_file  = "/etc/cairn/tls/mdm.key"
+
+# mode = "proxy"
+# trusted_proxies = ["10.0.0.2"]
+
+[storage]
+driver = "sqlite"
+path = "/var/db/cairn/cairn.db"
+# For mysql/postgres, set driver and reference the DSN by file or env:
+# driver = "postgres"
+# dsn_file = "/etc/cairn/secrets/storage_dsn"
+# dsn_env  = "CAIRN_STORAGE_DSN"
+
+[ca]
+# embedded — Cairn runs its own SCEP CA and issues device identity certs.
+# external — point enrollment at a third-party SCEP server (e.g. OpenXPKI).
+mode = "embedded"
+
+# [ca.external]
+# scep_url = "http://scep.example.com/scep/mdm"
+# ca_chain_file = "/etc/cairn/ca-chain.pem"
+# crl_url = "http://scep.example.com/crl"
+# challenge_env = "CAIRN_SCEP_CHALLENGE"
+
+[log]
+format = "text" # text | json
+level = "info"  # debug | info | warn | error

@@ -1,0 +1,42 @@
+# goreleaser configuration for Cairn.
+# Full release wiring (Docker, SBOM, signing, brew tap) lands in Phase 5;
+# this establishes the cross-platform binary matrix now.
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: cairn
+    main: ./cmd/cairn
+    binary: cairn
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/dzsec/cairn/internal/version.Version={{.Version}}
+      - -X github.com/dzsec/cairn/internal/version.Commit={{.ShortCommit}}
+      - -X github.com/dzsec/cairn/internal/version.Date={{.Date}}
+    goos:
+      - freebsd
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: github
