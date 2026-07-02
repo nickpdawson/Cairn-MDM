@@ -6,8 +6,10 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
+	"github.com/dzsec/cairn/internal/ca"
 	"github.com/dzsec/cairn/internal/config"
 	"github.com/dzsec/cairn/internal/mdmcore"
 	"github.com/dzsec/cairn/internal/server"
@@ -46,13 +48,35 @@ func runServe(ctx context.Context, args []string) error {
 	core := mdmcore.New(nanoStore, mdmcore.NewLogAdapter(log))
 	log.Info("mdm service ready", "path", cfg.Server.MDMPath)
 
+	deps := server.Deps{MDM: core.Handler()}
+
+	// Embedded SCEP CA (external-CA mode wires enrollment to a third-party SCEP
+	// server instead and is handled in a later phase).
+	if cfg.CA.Mode == config.CAEmbedded {
+		host := publicHost(cfg.Server.PublicURL)
+		authority, err := ca.Ensure(ctx, db.SQL(), ca.Options{
+			CommonName:   "Cairn CA (" + host + ")",
+			Organization: "Cairn",
+			Challenge:    cfg.CA.External.Challenge, // reused as the static challenge if set
+		})
+		if err != nil {
+			return err
+		}
+		scepHandler, err := authority.SCEPHandler()
+		if err != nil {
+			return err
+		}
+		deps.SCEP = scepHandler
+		log.Info("embedded CA ready", "scep_path", "/scep", "ca_cn", authority.Certificate().Subject.CommonName)
+	}
+
 	// TLS beyond plaintext proxy mode arrives in Phase 2; fail loudly rather
 	// than silently serving cleartext where TLS was requested.
 	if cfg.Server.TLS.Mode != config.TLSProxy {
 		return fmt.Errorf("tls.mode %q not yet implemented (Phase 2); use tls.mode=proxy behind a terminating reverse proxy for now", cfg.Server.TLS.Mode)
 	}
 
-	srv := server.New(cfg, log, db, core.Handler())
+	srv := server.New(cfg, log, db, deps)
 	httpSrv := &http.Server{
 		Addr:              cfg.Server.Listen,
 		Handler:           srv.Handler(),
@@ -81,4 +105,14 @@ func runServe(ctx context.Context, args []string) error {
 	}
 	log.Info("stopped")
 	return nil
+}
+
+// publicHost extracts the host from the configured public URL for use in the CA
+// subject. It falls back to the raw value if parsing fails (validation has
+// already ensured it is a URL, so this is defensive).
+func publicHost(publicURL string) string {
+	if u, err := url.Parse(publicURL); err == nil && u.Host != "" {
+		return u.Hostname()
+	}
+	return publicURL
 }

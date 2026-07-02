@@ -21,19 +21,25 @@ type Readiness interface {
 	Ping(ctx context.Context) error
 }
 
+// Deps are the optional subsystem handlers the server mounts. A nil handler is
+// simply not mounted.
+type Deps struct {
+	MDM  http.Handler // NanoMDM check-in/command handler (mounted at mdm_path)
+	SCEP http.Handler // embedded-CA SCEP handler (mounted at /scep)
+}
+
 // Server holds the mux and its dependencies.
 type Server struct {
 	cfg   config.Config
 	log   *slog.Logger
 	ready Readiness
-	mdm   http.Handler
+	deps  Deps
 	mux   *http.ServeMux
 }
 
-// New builds a Server and registers routes. mdm is the NanoMDM check-in/command
-// handler; if nil, the /mdm route is not mounted (Phase 0 behaviour).
-func New(cfg config.Config, log *slog.Logger, ready Readiness, mdm http.Handler) *Server {
-	s := &Server{cfg: cfg, log: log, ready: ready, mdm: mdm, mux: http.NewServeMux()}
+// New builds a Server and registers routes.
+func New(cfg config.Config, log *slog.Logger, ready Readiness, deps Deps) *Server {
+	s := &Server{cfg: cfg, log: log, ready: ready, deps: deps, mux: http.NewServeMux()}
 	s.routes()
 	return s
 }
@@ -48,11 +54,19 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /readyz", s.handleReadyz)
 	s.mux.HandleFunc("GET /version", s.handleVersion)
 
-	if s.mdm != nil {
+	if s.deps.MDM != nil {
 		// Apple devices PUT check-in and command results to this single path.
 		// Mount without a method restriction and let NanoMDM's handler decide;
 		// the pattern has no method token so all methods match.
-		s.mux.Handle(s.cfg.Server.MDMPath, s.mdm)
+		s.mux.Handle(s.cfg.Server.MDMPath, s.deps.MDM)
+	}
+
+	if s.deps.SCEP != nil {
+		// The SCEP handler's internal router matches exactly "/scep", so the
+		// request path must reach it unchanged. Mount the subtree at "/scep/"
+		// as well so a trailing slash still routes.
+		s.mux.Handle("/scep", s.deps.SCEP)
+		s.mux.Handle("/scep/", s.deps.SCEP)
 	}
 }
 
