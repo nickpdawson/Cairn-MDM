@@ -48,6 +48,8 @@ func main() {
 		err = runPushcert(ctx, args)
 	case "enqueue":
 		err = runEnqueue(ctx, args)
+	case "ca":
+		err = runCA(ctx, args)
 	case "version", "-v", "--version":
 		fmt.Println(version.Info())
 	case "help", "-h", "--help":
@@ -75,6 +77,7 @@ Commands:
   migrate    apply database migrations and exit
   pushcert   manage the APNs push certificate (import)
   enqueue    queue a command for a device and push
+  ca         manage the certificate authority (export)
   version    print build information
   help       show this help
 

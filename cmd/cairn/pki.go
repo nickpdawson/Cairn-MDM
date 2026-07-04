@@ -1,0 +1,114 @@
+package main
+
+import (
+	"context"
+	"database/sql"
+	"encoding/pem"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+
+	"github.com/dzsec/cairn/internal/ca"
+	"github.com/dzsec/cairn/internal/config"
+	"github.com/dzsec/cairn/internal/enroll"
+	"github.com/dzsec/cairn/internal/push"
+	"github.com/dzsec/cairn/internal/server"
+)
+
+// wirePKI configures the SCEP and enrollment handlers according to ca.mode:
+//
+//	generate/import — Cairn runs the embedded SCEP CA and mounts /scep; the
+//	                  enrollment profile installs Cairn's CA and points SCEP at
+//	                  <public_url>/scep.
+//	external        — no /scep; the enrollment profile installs the configured
+//	                  trust chain and points SCEP at ca.external.scep_url.
+//
+// It mutates deps and returns the authority (nil in external mode) so callers
+// can, e.g., reuse the CA for profile signing later.
+func wirePKI(ctx context.Context, cfg config.Config, db *sql.DB, topics enroll.TopicProvider, log *slog.Logger, deps *server.Deps) (*ca.CA, error) {
+	host := publicHost(cfg.Server.PublicURL)
+	org := "cairn." + host
+
+	if cfg.CA.Mode.Embedded() {
+		opts := ca.Options{
+			CommonName:   "Cairn CA (" + host + ")",
+			Organization: "Cairn",
+			Challenge:    cfg.CA.External.Challenge, // static challenge if configured
+		}
+		if cfg.CA.Mode == config.CAImport {
+			certPEM, err := os.ReadFile(cfg.CA.Import.CertFile)
+			if err != nil {
+				return nil, fmt.Errorf("read ca.import.cert_file: %w", err)
+			}
+			keyPEM, err := os.ReadFile(cfg.CA.Import.KeyFile)
+			if err != nil {
+				return nil, fmt.Errorf("read ca.import.key_file: %w", err)
+			}
+			opts.ImportCertPEM = certPEM
+			opts.ImportKeyPEM = keyPEM
+		}
+
+		authority, err := ca.Ensure(ctx, db, opts)
+		if err != nil {
+			return nil, err
+		}
+		scepHandler, err := authority.SCEPHandler()
+		if err != nil {
+			return nil, err
+		}
+		deps.SCEP = scepHandler
+		deps.Enroll = enroll.New(enroll.Config{
+			Organization:  org,
+			CAAnchorsDER:  [][]byte{authority.Certificate().Raw},
+			SCEPURL:       cfg.Server.PublicURL + "/scep",
+			Challenge:     cfg.CA.External.Challenge,
+			MDMServerURL:  cfg.Server.PublicURL + cfg.Server.MDMPath,
+			SubjectPrefix: "devices." + host,
+		}, topics, push.SettingTopic, log)
+
+		deps.CA = caDownloadHandler([][]byte{authority.Certificate().Raw})
+		log.Info("embedded CA ready", "mode", cfg.CA.Mode, "scep_path", "/scep",
+			"ca_cn", authority.Certificate().Subject.CommonName)
+		log.Info("enrollment endpoint ready", "path", "/enroll")
+		return authority, nil
+	}
+
+	// external mode: delegate SCEP to a third-party server (OpenXPKI, NDES).
+	chainPEM, err := os.ReadFile(cfg.CA.External.CAChainFile)
+	if err != nil {
+		return nil, fmt.Errorf("read ca.external.ca_chain_file: %w", err)
+	}
+	anchors, err := ca.TrustAnchorsDER(chainPEM)
+	if err != nil {
+		return nil, err
+	}
+	deps.Enroll = enroll.New(enroll.Config{
+		Organization:  org,
+		CAAnchorsDER:  anchors,
+		SCEPURL:       cfg.CA.External.SCEPURL,
+		Challenge:     cfg.CA.External.Challenge,
+		MDMServerURL:  cfg.Server.PublicURL + cfg.Server.MDMPath,
+		SubjectPrefix: "devices." + host,
+	}, topics, push.SettingTopic, log)
+
+	deps.CA = caDownloadHandler(anchors)
+	log.Info("external SCEP configured", "scep_url", cfg.CA.External.SCEPURL, "trust_anchors", len(anchors))
+	log.Info("enrollment endpoint ready", "path", "/enroll")
+	return nil, nil
+}
+
+// caDownloadHandler serves the trust anchors as a PEM bundle at GET /ca, so a
+// device can install the root out-of-band before enrolling (needed for
+// fully-offline / private-TLS deployments).
+func caDownloadHandler(anchorsDER [][]byte) http.Handler {
+	var buf []byte
+	for _, der := range anchorsDER {
+		buf = append(buf, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})...)
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/x-pem-file")
+		w.Header().Set("Content-Disposition", `attachment; filename="cairn-ca.pem"`)
+		_, _ = w.Write(buf)
+	})
+}

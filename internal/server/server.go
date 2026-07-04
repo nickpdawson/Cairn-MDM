@@ -27,6 +27,7 @@ type Deps struct {
 	MDM    http.Handler // NanoMDM check-in/command handler (mounted at mdm_path)
 	SCEP   http.Handler // embedded-CA SCEP handler (mounted at /scep)
 	Enroll http.Handler // enrollment profile handler (mounted at /enroll)
+	CA     http.Handler // CA trust-anchor download (mounted at GET /ca)
 }
 
 // Server holds the mux and its dependencies.
@@ -72,6 +73,10 @@ func (s *Server) routes() {
 
 	if s.deps.Enroll != nil {
 		s.mux.Handle("GET /enroll", s.deps.Enroll)
+	}
+
+	if s.deps.CA != nil {
+		s.mux.Handle("GET /ca", s.deps.CA)
 	}
 }
 

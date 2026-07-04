@@ -28,6 +28,12 @@ type Options struct {
 	KeyBits      int    // CA RSA key size (default 4096)
 	Years        int    // CA validity in years (default 10)
 
+	// ImportCertPEM / ImportKeyPEM, when both set, seed the CA from an existing
+	// keypair (import mode — e.g. a subordinate CA from Microsoft AD CS) instead
+	// of generating one. Ignored once a CA is already persisted.
+	ImportCertPEM []byte
+	ImportKeyPEM  []byte
+
 	// LeafValidityDays is the lifetime of issued device certs (default 365).
 	LeafValidityDays int
 	// AllowRenewalDays lets a device re-enroll this many days before expiry
@@ -64,7 +70,11 @@ func Ensure(ctx context.Context, db *sql.DB, opts Options) (*CA, error) {
 
 	cert, key, err := loadCA(ctx, db)
 	if errors.Is(err, sql.ErrNoRows) {
-		cert, key, err = generateCA(ctx, db, opts)
+		if len(opts.ImportCertPEM) > 0 || len(opts.ImportKeyPEM) > 0 {
+			cert, key, err = importCA(ctx, db, opts.ImportCertPEM, opts.ImportKeyPEM)
+		} else {
+			cert, key, err = generateCA(ctx, db, opts)
+		}
 	}
 	if err != nil {
 		return nil, err
@@ -127,6 +137,58 @@ func generateCA(ctx context.Context, db *sql.DB, opts Options) (*x509.Certificat
 		return nil, nil, fmt.Errorf("ca: persist: %w", err)
 	}
 	return cert, key, nil
+}
+
+// importCA seeds the CA table from an existing certificate + RSA key (PEM). The
+// key must be RSA (the SCEP depot signs with RSA). Accepts PKCS#1 or PKCS#8 keys.
+func importCA(ctx context.Context, db *sql.DB, certPEM, keyPEM []byte) (*x509.Certificate, *rsa.PrivateKey, error) {
+	if len(certPEM) == 0 || len(keyPEM) == 0 {
+		return nil, nil, errors.New("ca: import requires both cert and key PEM")
+	}
+	cb, _ := pem.Decode(certPEM)
+	if cb == nil {
+		return nil, nil, errors.New("ca: import cert is not valid PEM")
+	}
+	cert, err := x509.ParseCertificate(cb.Bytes)
+	if err != nil {
+		return nil, nil, fmt.Errorf("ca: parse import cert: %w", err)
+	}
+	if !cert.IsCA {
+		return nil, nil, errors.New("ca: import certificate is not a CA (BasicConstraints CA=false)")
+	}
+
+	key, err := parseRSAKey(keyPEM)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Persist in the normalized PKCS#1 form loadCA expects.
+	normCert := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})
+	normKey := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+	if _, err := db.ExecContext(ctx, `INSERT INTO ca (id, cert_pem, key_pem) VALUES (1, ?, ?)`, normCert, normKey); err != nil {
+		return nil, nil, fmt.Errorf("ca: persist imported CA: %w", err)
+	}
+	return cert, key, nil
+}
+
+// parseRSAKey decodes an RSA private key from PEM in either PKCS#1 or PKCS#8.
+func parseRSAKey(keyPEM []byte) (*rsa.PrivateKey, error) {
+	kb, _ := pem.Decode(keyPEM)
+	if kb == nil {
+		return nil, errors.New("ca: import key is not valid PEM")
+	}
+	if key, err := x509.ParsePKCS1PrivateKey(kb.Bytes); err == nil {
+		return key, nil
+	}
+	parsed, err := x509.ParsePKCS8PrivateKey(kb.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("ca: parse import key (PKCS#1 and PKCS#8 both failed): %w", err)
+	}
+	rsaKey, ok := parsed.(*rsa.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("ca: import key must be RSA, got %T", parsed)
+	}
+	return rsaKey, nil
 }
 
 // RootPEM returns the CA certificate in PEM form, for embedding as a trust

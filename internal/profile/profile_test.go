@@ -16,7 +16,7 @@ import (
 func sampleParams() EnrollmentParams {
 	return EnrollmentParams{
 		Organization:  "cairn.example.com",
-		CADER:         []byte("dummy-der-bytes"),
+		CAAnchorsDER:  [][]byte{[]byte("dummy-der-bytes")},
 		SCEPURL:       "https://mdm.example.com/scep",
 		SubjectCN:     "host1.devices.example.com",
 		Challenge:     "s3cr3t",

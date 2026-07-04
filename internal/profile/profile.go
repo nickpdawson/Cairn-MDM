@@ -25,7 +25,7 @@ type EnrollmentParams struct {
 	Organization string // PayloadOrganization + reverse-DNS identifier root, e.g. "cairn.example.com"
 	DisplayName  string // top-level profile display name
 
-	CADER []byte // CA certificate (DER) to install as a trust anchor
+	CAAnchorsDER [][]byte // CA certificate(s) (DER) to install as trust anchors
 
 	SCEPURL   string // SCEP endpoint, e.g. https://mdm.example.com/scep
 	SCEPName  string // SCEP CA identifier (may be empty)
@@ -52,17 +52,21 @@ func BuildEnrollment(p EnrollmentParams) (map[string]any, error) {
 
 	id := func(suffix string) string { return p.Organization + "." + suffix }
 
-	rootUUID := newUUID()
 	scepUUID := newUUID()
 	mdmUUID := newUUID()
 
-	root := Payload{
-		"PayloadType":        "com.apple.security.root",
-		"PayloadVersion":     1,
-		"PayloadIdentifier":  id("ca"),
-		"PayloadUUID":        rootUUID,
-		"PayloadDisplayName": "Certificate Authority",
-		"PayloadContent":     p.CADER, // plist encodes []byte as <data>
+	// One com.apple.security.root payload per trust anchor (each holds one cert),
+	// installed before the SCEP/MDM payloads that rely on the chain.
+	var payloads []any
+	for i, der := range p.CAAnchorsDER {
+		payloads = append(payloads, Payload{
+			"PayloadType":        "com.apple.security.root",
+			"PayloadVersion":     1,
+			"PayloadIdentifier":  fmt.Sprintf("%s.ca.%d", p.Organization, i),
+			"PayloadUUID":        newUUID(),
+			"PayloadDisplayName": "Certificate Authority",
+			"PayloadContent":     der, // plist encodes []byte as <data>
+		})
 	}
 
 	scep := Payload{
@@ -105,6 +109,8 @@ func BuildEnrollment(p EnrollmentParams) (map[string]any, error) {
 		display = "Cairn Enrollment"
 	}
 
+	payloads = append(payloads, scep, mdm)
+
 	return map[string]any{
 		"PayloadType":         "Configuration",
 		"PayloadVersion":      1,
@@ -112,7 +118,7 @@ func BuildEnrollment(p EnrollmentParams) (map[string]any, error) {
 		"PayloadUUID":         newUUID(),
 		"PayloadDisplayName":  display,
 		"PayloadOrganization": p.Organization,
-		"PayloadContent":      []any{root, scep, mdm},
+		"PayloadContent":      payloads,
 	}, nil
 }
 

@@ -21,7 +21,7 @@ func (f fakeTopics) GetSetting(_ context.Context, key string) (string, error) {
 func testHandler(topics fakeTopics) *Handler {
 	return New(Config{
 		Organization: "cairn.example.com",
-		CADER:        []byte("der"),
+		CAAnchorsDER: [][]byte{[]byte("der")},
 		SCEPURL:      "https://mdm.example.com/scep",
 		MDMServerURL: "https://mdm.example.com/mdm",
 	}, topics, "apns_topic", slog.New(slog.NewTextHandler(io.Discard, nil)))

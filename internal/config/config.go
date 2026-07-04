@@ -41,16 +41,25 @@ const (
 	DriverPostgres StorageDriver = "postgres"
 )
 
-// CAMode selects whether Cairn runs its own SCEP CA or defers to an external one.
+// CAMode selects how device identity certificates are issued.
 type CAMode string
 
 const (
-	// CAEmbedded issues device identity certs from a built-in SCEP CA.
-	CAEmbedded CAMode = "embedded"
-	// CAExternal points enrollment profiles at a third-party SCEP server
-	// (e.g. OpenXPKI) and never signs anything itself.
+	// CAGenerate self-generates a device-identity CA on first boot and runs the
+	// embedded SCEP endpoint. The zero-PKI default.
+	CAGenerate CAMode = "generate"
+	// CAImport runs the embedded SCEP endpoint but signs with an operator-supplied
+	// CA cert+key (e.g. a subordinate CA from Microsoft AD CS or an existing org
+	// root), so device certs chain to that CA.
+	CAImport CAMode = "import"
+	// CAExternal points enrollment profiles at a third-party SCEP server (OpenXPKI,
+	// Microsoft NDES) and never issues certificates itself.
 	CAExternal CAMode = "external"
 )
+
+// Embedded reports whether the mode runs Cairn's own SCEP endpoint (generate or
+// import) as opposed to delegating to an external SCEP server.
+func (m CAMode) Embedded() bool { return m == CAGenerate || m == CAImport }
 
 // Config is the fully-resolved runtime configuration. Secrets have already been
 // loaded from their _file/_env sources by the time a Config is returned.
@@ -104,8 +113,15 @@ type Storage struct {
 
 // CA configures certificate issuance for device identities.
 type CA struct {
-	Mode     CAMode     `toml:"mode"`
+	Mode     CAMode        `toml:"mode"`
+	Import   CAImportCfg   `toml:"import"`
 	External CAExternalCfg `toml:"external"`
+}
+
+// CAImportCfg supplies an existing CA cert+key for import mode.
+type CAImportCfg struct {
+	CertFile string `toml:"cert_file"`
+	KeyFile  string `toml:"key_file"`
 }
 
 // CAExternalCfg describes an external SCEP server (external mode only).
@@ -140,7 +156,7 @@ func Default() Config {
 			Driver: DriverSQLite,
 			Path:   "/var/db/cairn/cairn.db",
 		},
-		CA:  CA{Mode: CAEmbedded},
+		CA:  CA{Mode: CAGenerate},
 		Log: Log{Format: "text", Level: "info"},
 	}
 }
@@ -278,14 +294,21 @@ func (c Config) Validate() error {
 	}
 
 	switch c.CA.Mode {
-	case CAEmbedded:
-		// embedded CA material is generated/loaded by the ca package.
+	case CAGenerate:
+		// CA is self-generated on first boot by the ca package.
+	case CAImport:
+		if c.CA.Import.CertFile == "" || c.CA.Import.KeyFile == "" {
+			errs = append(errs, errors.New("ca.import.cert_file and key_file are required when ca.mode=import"))
+		}
 	case CAExternal:
 		if c.CA.External.SCEPURL == "" {
 			errs = append(errs, errors.New("ca.external.scep_url is required when ca.mode=external"))
 		}
+		if c.CA.External.CAChainFile == "" {
+			errs = append(errs, errors.New("ca.external.ca_chain_file is required when ca.mode=external (trust anchor for the enrollment profile)"))
+		}
 	default:
-		errs = append(errs, fmt.Errorf("ca.mode must be embedded|external, got %q", c.CA.Mode))
+		errs = append(errs, fmt.Errorf("ca.mode must be generate|import|external, got %q", c.CA.Mode))
 	}
 
 	return errors.Join(errs...)

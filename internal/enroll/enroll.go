@@ -20,12 +20,12 @@ type TopicProvider interface {
 
 // Config holds everything the handler needs to render a profile.
 type Config struct {
-	Organization  string // reverse-DNS identifier root + PayloadOrganization
-	CADER         []byte // CA cert (DER) trust anchor
-	SCEPURL       string // e.g. https://mdm.example.com/scep
-	Challenge     string // static SCEP challenge (may be empty)
-	MDMServerURL  string // e.g. https://mdm.example.com/mdm
-	SubjectPrefix string // device cert CN suffix, e.g. "devices.example.com"
+	Organization  string   // reverse-DNS identifier root + PayloadOrganization
+	CAAnchorsDER  [][]byte // CA cert(s) (DER) to install as trust anchors
+	SCEPURL       string   // e.g. https://mdm.example.com/scep
+	Challenge     string   // static SCEP challenge (may be empty)
+	MDMServerURL  string   // e.g. https://mdm.example.com/mdm
+	SubjectPrefix string   // device cert CN suffix, e.g. "devices.example.com"
 
 	Signer *profile.Signer // optional; if set, profiles are CMS-signed
 }
@@ -62,7 +62,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	prof, err := profile.BuildEnrollment(profile.EnrollmentParams{
 		Organization:  h.cfg.Organization,
-		CADER:         h.cfg.CADER,
+		CAAnchorsDER:  h.cfg.CAAnchorsDER,
 		SCEPURL:       h.cfg.SCEPURL,
 		SubjectCN:     subjectCN,
 		Challenge:     h.cfg.Challenge,

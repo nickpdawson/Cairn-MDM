@@ -9,11 +9,8 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/dzsec/cairn/internal/ca"
 	"github.com/dzsec/cairn/internal/config"
-	"github.com/dzsec/cairn/internal/enroll"
 	"github.com/dzsec/cairn/internal/mdmcore"
-	"github.com/dzsec/cairn/internal/push"
 	"github.com/dzsec/cairn/internal/server"
 	"github.com/dzsec/cairn/internal/storage/sqlite"
 	"github.com/dzsec/cairn/internal/version"
@@ -52,36 +49,9 @@ func runServe(ctx context.Context, args []string) error {
 
 	deps := server.Deps{MDM: core.Handler()}
 
-	// Embedded SCEP CA (external-CA mode wires enrollment to a third-party SCEP
-	// server instead and is handled in a later phase).
-	if cfg.CA.Mode == config.CAEmbedded {
-		host := publicHost(cfg.Server.PublicURL)
-		authority, err := ca.Ensure(ctx, db.SQL(), ca.Options{
-			CommonName:   "Cairn CA (" + host + ")",
-			Organization: "Cairn",
-			Challenge:    cfg.CA.External.Challenge, // reused as the static challenge if set
-		})
-		if err != nil {
-			return err
-		}
-		scepHandler, err := authority.SCEPHandler()
-		if err != nil {
-			return err
-		}
-		deps.SCEP = scepHandler
-		log.Info("embedded CA ready", "scep_path", "/scep", "ca_cn", authority.Certificate().Subject.CommonName)
-
-		// Enrollment profile handler (embedded-CA mode). External-CA mode wires
-		// its own SCEP URL/challenge in a later phase.
-		deps.Enroll = enroll.New(enroll.Config{
-			Organization:  "cairn." + host,
-			CADER:         authority.Certificate().Raw,
-			SCEPURL:       cfg.Server.PublicURL + "/scep",
-			Challenge:     cfg.CA.External.Challenge,
-			MDMServerURL:  cfg.Server.PublicURL + cfg.Server.MDMPath,
-			SubjectPrefix: "devices." + host,
-		}, db, push.SettingTopic, log)
-		log.Info("enrollment endpoint ready", "path", "/enroll")
+	// Configure SCEP + enrollment per ca.mode (generate | import | external).
+	if _, err := wirePKI(ctx, cfg, db.SQL(), db, log, &deps); err != nil {
+		return err
 	}
 
 	// TLS beyond plaintext proxy mode arrives in Phase 2; fail loudly rather

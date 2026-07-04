@@ -33,8 +33,8 @@ path = "/tmp/x.db"
 	if cfg.Server.MDMPath != "/mdm" {
 		t.Errorf("MDMPath default = %q, want /mdm", cfg.Server.MDMPath)
 	}
-	if cfg.CA.Mode != CAEmbedded {
-		t.Errorf("CA.Mode default = %q, want embedded", cfg.CA.Mode)
+	if cfg.CA.Mode != CAGenerate {
+		t.Errorf("CA.Mode default = %q, want generate", cfg.CA.Mode)
 	}
 }
 
@@ -114,6 +114,38 @@ mode = "proxy"
 mode = "external"
 `)
 	if _, err := Load(p); err == nil {
-		t.Fatal("expected error: external CA without scep_url")
+		t.Fatal("expected error: external CA without scep_url / ca_chain_file")
+	}
+}
+
+func TestImportCARequiresCertAndKey(t *testing.T) {
+	p := writeTemp(t, `
+[server]
+public_url = "https://mdm.example.com"
+listen = ":8443"
+[server.tls]
+mode = "proxy"
+[ca]
+mode = "import"
+`)
+	if _, err := Load(p); err == nil {
+		t.Fatal("expected error: import CA without cert_file/key_file")
+	}
+}
+
+func TestGenerateCAIsDefault(t *testing.T) {
+	p := writeTemp(t, `
+[server]
+public_url = "https://mdm.example.com"
+listen = ":8443"
+[server.tls]
+mode = "proxy"
+`)
+	cfg, err := Load(p)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.CA.Mode != CAGenerate {
+		t.Errorf("default CA mode = %q, want generate", cfg.CA.Mode)
 	}
 }
