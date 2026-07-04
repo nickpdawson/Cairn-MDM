@@ -15,6 +15,17 @@
         <div class="num">{{.Active}}</div>
         <div class="label">Active in last 24h</div>
       </div>
+      <div class="card stat">
+        {{with .APNs}}
+          {{if .Loaded}}
+            <div class="num" style="font-size:20px">{{if .Warn}}⚠️{{else}}✓{{end}} {{if .Days}}{{.Days}}d{{else}}OK{{end}}</div>
+            <div class="label">APNs cert{{if .Expires}} · expires {{.Expires}}{{end}}</div>
+          {{else}}
+            <div class="num" style="font-size:20px">—</div>
+            <div class="label">APNs cert not loaded</div>
+          {{end}}
+        {{end}}
+      </div>
     </div>
 
     <div class="card callout">

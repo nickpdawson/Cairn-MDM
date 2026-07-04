@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>{{template "head" .}}</head>
+<body>
+  {{template "topbar" .}}
+  <main>
+    <p><a href="/admin/devices">← Devices</a></p>
+    <h1>
+      <span class="dot {{if .Device.Enrolled}}on{{else}}off{{end}}"></span>
+      {{.Device.DisplayName}}
+    </h1>
+
+    {{if .Flash}}<div class="card callout" style="margin-top:0">{{.Flash}}</div>{{end}}
+
+    <div class="card" style="margin-top:16px">
+      <table>
+        <tbody>
+          <tr><th style="width:180px">Status</th><td>{{if .Device.Enrolled}}Enrolled{{else}}Checked out{{end}}</td></tr>
+          <tr><th>Enrollment ID</th><td class="mono">{{.Device.ID}}</td></tr>
+          <tr><th>Serial</th><td class="mono">{{if .Device.Serial}}{{.Device.Serial}}{{else}}—{{end}}</td></tr>
+          <tr><th>Model</th><td>{{if .Device.Model}}{{.Device.Model}}{{else}}—{{end}}</td></tr>
+          <tr><th>OS</th><td>{{.Device.Product}} {{.Device.OSVersion}} {{if .Device.BuildVersion}}({{.Device.BuildVersion}}){{end}}</td></tr>
+          <tr><th>Enrolled</th><td class="sub">{{nullStr .Device.EnrolledAt}}</td></tr>
+          <tr><th>Last seen</th><td class="sub">{{nullStr .Device.LastSeen}}</td></tr>
+          <tr><th>Token updated</th><td class="sub">{{nullStr .Device.TokenUpdatedAt}}</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Actions</h2>
+    <form method="post" action="/admin/devices/{{.Device.ID}}/refresh">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <button class="btn" type="submit">Refresh device info</button>
+    </form>
+  </main>
+</body>
+</html>

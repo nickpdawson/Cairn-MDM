@@ -49,8 +49,8 @@ func command(inner map[string]any) (*mdm.Command, error) {
 }
 
 // Enqueue queues cmd for the given enrollment IDs and sends an APNs push so the
-// devices wake and check in. This is the in-process path the admin API and CLI
-// use — no HTTP round-trip, no API key.
+// devices wake and check in. This is the in-process path the admin console and
+// CLI use — no HTTP round-trip, no API key.
 func Enqueue(ctx context.Context, store storage.CommandEnqueuer, pusher push.Pusher, ids []string, cmd *mdm.Command) error {
 	if _, err := store.EnqueueCommand(ctx, ids, cmd); err != nil {
 		return fmt.Errorf("mdmcore: enqueue: %w", err)
@@ -61,6 +61,36 @@ func Enqueue(ctx context.Context, store storage.CommandEnqueuer, pusher push.Pus
 		}
 	}
 	return nil
+}
+
+// Commander bundles the store + pusher and exposes high-level command actions
+// for the admin console and API.
+type Commander struct {
+	store  storage.CommandEnqueuer
+	pusher push.Pusher
+}
+
+// NewCommander builds a Commander.
+func NewCommander(store storage.CommandEnqueuer, pusher push.Pusher) *Commander {
+	return &Commander{store: store, pusher: pusher}
+}
+
+// SendDeviceInformation queries fresh device information from the given devices.
+func (c *Commander) SendDeviceInformation(ctx context.Context, ids ...string) error {
+	cmd, err := DeviceInformationCommand()
+	if err != nil {
+		return err
+	}
+	return Enqueue(ctx, c.store, c.pusher, ids, cmd)
+}
+
+// SendInstallProfile installs a profile (raw .mobileconfig) on the given devices.
+func (c *Commander) SendInstallProfile(ctx context.Context, profile []byte, ids ...string) error {
+	cmd, err := InstallProfileCommand(profile)
+	if err != nil {
+		return err
+	}
+	return Enqueue(ctx, c.store, c.pusher, ids, cmd)
 }
 
 func newCommandUUID() string {

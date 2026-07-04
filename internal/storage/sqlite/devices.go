@@ -107,6 +107,18 @@ func (db *DB) ListDevices(ctx context.Context) ([]Device, error) {
 	return out, rows.Err()
 }
 
+// GetDevice returns one device by ID, or sql.ErrNoRows if absent.
+func (db *DB) GetDevice(ctx context.Context, id string) (Device, error) {
+	var d Device
+	err := db.sql.QueryRowContext(ctx,
+		`SELECT id, udid, serial, name, model, product, os_version, build_version,
+		        enrolled_at, last_seen, token_updated_at, checked_out_at
+		 FROM devices WHERE id = ?`, id).
+		Scan(&d.ID, &d.UDID, &d.Serial, &d.Name, &d.Model, &d.Product,
+			&d.OSVersion, &d.BuildVersion, &d.EnrolledAt, &d.LastSeen, &d.TokenUpdatedAt, &d.CheckedOutAt)
+	return d, err
+}
+
 // DeviceCounts returns total and active-within-24h counts for the dashboard.
 func (db *DB) DeviceCounts(ctx context.Context) (total, active int, err error) {
 	err = db.sql.QueryRowContext(ctx,

@@ -31,7 +31,18 @@ type Authenticator interface {
 // DeviceSource provides the inventory for the console.
 type DeviceSource interface {
 	ListDevices(ctx context.Context) ([]sqlite.Device, error)
+	GetDevice(ctx context.Context, id string) (sqlite.Device, error)
 	DeviceCounts(ctx context.Context) (total, active int, err error)
+}
+
+// SettingsSource reads stored settings (e.g. the APNs topic/expiry).
+type SettingsSource interface {
+	GetSetting(ctx context.Context, key string) (string, error)
+}
+
+// Commander runs device actions from the console.
+type Commander interface {
+	SendDeviceInformation(ctx context.Context, ids ...string) error
 }
 
 // Config holds display settings.
@@ -44,18 +55,20 @@ type App struct {
 	sessions *auth.SessionStore
 	auth     Authenticator
 	devices  DeviceSource
+	settings SettingsSource
+	cmd      Commander
 	cfg      Config
 	tmpl     *template.Template
 	log      *slog.Logger
 }
 
 // New builds the console.
-func New(sessions *auth.SessionStore, authn Authenticator, devices DeviceSource, cfg Config, log *slog.Logger) (*App, error) {
+func New(sessions *auth.SessionStore, authn Authenticator, devices DeviceSource, settings SettingsSource, cmd Commander, cfg Config, log *slog.Logger) (*App, error) {
 	tmpl, err := template.New("").Funcs(funcMap).ParseFS(files, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}
-	return &App{sessions: sessions, auth: authn, devices: devices, cfg: cfg, tmpl: tmpl, log: log}, nil
+	return &App{sessions: sessions, auth: authn, devices: devices, settings: settings, cmd: cmd, cfg: cfg, tmpl: tmpl, log: log}, nil
 }
 
 // Register mounts the console routes on mux. Implementing this interface keeps
@@ -72,6 +85,8 @@ func (a *App) Register(mux *http.ServeMux) {
 	// Authenticated console (operator or higher).
 	mux.Handle("GET /admin", a.requireRole(auth.RoleOperator, a.handleDashboard))
 	mux.Handle("GET /admin/devices", a.requireRole(auth.RoleOperator, a.handleDevices))
+	mux.Handle("GET /admin/devices/{id}", a.requireRole(auth.RoleOperator, a.handleDeviceDetail))
+	mux.Handle("POST /admin/devices/{id}/refresh", a.requireRole(auth.RoleOperator, a.handleDeviceRefresh))
 
 	// Bare "/" redirects to the console.
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {

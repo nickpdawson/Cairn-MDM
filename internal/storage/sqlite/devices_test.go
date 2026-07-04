@@ -15,9 +15,9 @@ import (
 // be exercised without a full protocol stack.
 type stubService struct{}
 
-func (stubService) Authenticate(*mdm.Request, *mdm.Authenticate) error        { return nil }
-func (stubService) TokenUpdate(*mdm.Request, *mdm.TokenUpdate) error          { return nil }
-func (stubService) CheckOut(*mdm.Request, *mdm.CheckOut) error                { return nil }
+func (stubService) Authenticate(*mdm.Request, *mdm.Authenticate) error { return nil }
+func (stubService) TokenUpdate(*mdm.Request, *mdm.TokenUpdate) error   { return nil }
+func (stubService) CheckOut(*mdm.Request, *mdm.CheckOut) error         { return nil }
 func (stubService) SetBootstrapToken(*mdm.Request, *mdm.SetBootstrapToken) error {
 	return nil
 }

@@ -1,8 +1,10 @@
 package web
 
 import (
+	"context"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // render executes a template as a full page. On error it logs and writes a 500.
@@ -89,7 +91,56 @@ func (a *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		"Active":        active,
 		"Recent":        recent,
 		"EnrollmentURL": strings.TrimRight(a.cfg.PublicURL, "/") + "/enroll",
+		"APNs":          a.apnsStatus(r.Context()),
 	})
+}
+
+// apnsStatus summarizes the loaded APNs push certificate for the dashboard.
+func (a *App) apnsStatus(ctx context.Context) map[string]any {
+	topic, _ := a.settings.GetSetting(ctx, "apns_topic")
+	if topic == "" {
+		return map[string]any{"Loaded": false}
+	}
+	st := map[string]any{"Loaded": true, "Topic": topic}
+	if exp, _ := a.settings.GetSetting(ctx, "apns_not_after"); exp != "" {
+		if t, err := time.Parse(time.RFC3339, exp); err == nil {
+			days := int(time.Until(t).Hours() / 24)
+			st["Expires"] = t.Format("2006-01-02")
+			st["Days"] = days
+			st["Warn"] = days <= 30
+		}
+	}
+	return st
+}
+
+func (a *App) handleDeviceDetail(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	d, err := a.devices.GetDevice(r.Context(), id)
+	if err != nil {
+		a.render(w, r, http.StatusNotFound, "error.html", map[string]any{
+			"Title": "Not found", "Message": "No such device.",
+		})
+		return
+	}
+	a.render(w, r, http.StatusOK, "device.html", map[string]any{
+		"Title":  d.DisplayName(),
+		"Device": d,
+		"Flash":  r.URL.Query().Get("flash"),
+	})
+}
+
+func (a *App) handleDeviceRefresh(w http.ResponseWriter, r *http.Request) {
+	if !a.checkCSRF(r) {
+		http.Error(w, "invalid CSRF token", http.StatusForbidden)
+		return
+	}
+	id := r.PathValue("id")
+	if err := a.cmd.SendDeviceInformation(r.Context(), id); err != nil {
+		a.log.Error("send device information", "id", id, "err", err)
+		http.Redirect(w, r, "/admin/devices/"+id+"?flash=Failed+to+queue+refresh", http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/admin/devices/"+id+"?flash=Refresh+queued", http.StatusSeeOther)
 }
 
 func (a *App) handleDevices(w http.ResponseWriter, r *http.Request) {

@@ -16,7 +16,7 @@
           <tr>
             <td>
               <span class="dot {{if .Enrolled}}on{{else}}off{{end}}"></span>
-              {{.DisplayName}}
+              <a href="/admin/devices/{{.ID}}">{{.DisplayName}}</a>
               <div class="sub mono">{{.Serial}}</div>
             </td>
             <td>{{if .Model}}{{.Model}}{{else}}—{{end}}</td>

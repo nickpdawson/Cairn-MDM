@@ -27,12 +27,16 @@ func testApp(t *testing.T) (*App, *auth.SessionStore, *sqlite.DB) {
 		t.Fatal(err)
 	}
 	sessions := auth.NewSessionStore(db.SQL(), time.Hour)
-	app, err := New(sessions, local, db, Config{PublicURL: "https://mdm.example.org"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	app, err := New(sessions, local, db, db, stubCommander{}, Config{PublicURL: "https://mdm.example.org"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return app, sessions, db
 }
+
+type stubCommander struct{}
+
+func (stubCommander) SendDeviceInformation(context.Context, ...string) error { return nil }
 
 func mux(app *App) *http.ServeMux {
 	m := http.NewServeMux()

@@ -12,6 +12,7 @@ import (
 	"github.com/dzsec/cairn/internal/auth"
 	"github.com/dzsec/cairn/internal/config"
 	"github.com/dzsec/cairn/internal/mdmcore"
+	"github.com/dzsec/cairn/internal/push"
 	"github.com/dzsec/cairn/internal/server"
 	"github.com/dzsec/cairn/internal/storage/sqlite"
 	"github.com/dzsec/cairn/internal/version"
@@ -59,8 +60,10 @@ func runServe(ctx context.Context, args []string) error {
 	}
 
 	// Admin console.
+	pusher := push.NewPusher(nanoStore, mdmcore.NewLogAdapter(log))
+	commander := mdmcore.NewCommander(nanoStore, pusher)
 	sessions := auth.NewSessionStore(db.SQL(), 12*time.Hour)
-	console, err := web.New(sessions, auth.NewLocalStore(db.SQL()), db,
+	console, err := web.New(sessions, auth.NewLocalStore(db.SQL()), db, db, commander,
 		web.Config{PublicURL: cfg.Server.PublicURL}, log)
 	if err != nil {
 		return err
