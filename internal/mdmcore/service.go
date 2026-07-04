@@ -6,6 +6,7 @@
 package mdmcore
 
 import (
+	"log/slog"
 	"net/http"
 
 	nlog "github.com/micromdm/nanolib/log"
@@ -35,8 +36,14 @@ type Core struct {
 // It intentionally does not mount NanoMDM's HTTP command API — Cairn enqueues
 // commands in-process through its own authenticated API, so the API-key surface
 // v1 exposed does not exist here.
-func New(store storage.AllStorage, logger nlog.Logger) *Core {
+func New(store storage.AllStorage, logger nlog.Logger, proj DeviceProjector, slog *slog.Logger) *Core {
 	var svc service.CheckinAndCommandService = nanomdm.New(store, nanomdm.WithLogger(logger.With("service", "nanomdm")))
+	// Wrap the core with the projector, then certauth on the outside. certauth
+	// gates first, so the projection only runs for cert-authenticated requests
+	// and records state after the core service has persisted it.
+	if proj != nil {
+		svc = NewEventService(svc, proj, slog)
+	}
 	svc = certauth.New(svc, store, certauth.WithLogger(logger.With("service", "certauth")))
 
 	h := httpmdm.CheckinAndCommandHandler(svc, logger.With("handler", "mdm"))

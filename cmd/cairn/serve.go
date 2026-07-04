@@ -42,9 +42,11 @@ func runServe(ctx context.Context, args []string) error {
 	defer db.Close()
 	log.Info("storage ready", "driver", cfg.Storage.Driver, "path", cfg.Storage.Path)
 
-	// Assemble the embedded NanoMDM service over our storage.
+	// Assemble the embedded NanoMDM service over our storage. The SQLite DB is
+	// the device-inventory projector — enrollments update the inventory as they
+	// happen (no polling).
 	nanoStore := db.NanoStorage(log)
-	core := mdmcore.New(nanoStore, mdmcore.NewLogAdapter(log))
+	core := mdmcore.New(nanoStore, mdmcore.NewLogAdapter(log), db, log)
 	log.Info("mdm service ready", "path", cfg.Server.MDMPath)
 
 	deps := server.Deps{MDM: core.Handler()}
