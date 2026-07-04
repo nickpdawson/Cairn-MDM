@@ -7,39 +7,45 @@ migration runner, `/healthz` `/readyz` `/version`, Makefile + goreleaser + CI
 (cross-compile matrix incl. FreeBSD, gitleaks). MIT licensed.
 
 ## Phase 1 — minimal enroll + push ✅ (code) · ⏳ (real-device gate)
+SQLite backend implementing NanoMDM's `AllStorage` (validated by NanoMDM's own
+`test/e2e` suite), the MDM service chain on `/mdm`, embedded SCEP CA, enrollment
+profile builder + PKCS7 signing, APNs push + push-cert loader, `/enroll`, and the
+`pushcert`/`enqueue` CLIs. Remaining: the manual real-device gate (Apple hardware
++ real APNs cert + public TLS) — procedure below.
 
-Implemented and tested:
-
+## Phase 2 — flexible PKI, one-command setup, admin console ✅
 | Piece | Package | Validation |
 |-------|---------|------------|
-| SQLite `AllStorage` | `internal/storage/sqlite` | NanoMDM's upstream `test/e2e` suite passes (enroll, certauth, queue, bootstrap token, push cert, tally, migrate) |
-| MDM service chain + `/mdm` | `internal/mdmcore` | signature middleware rejects unsigned (400, not 404); e2e above drives the full stack |
-| Embedded SCEP CA + `/scep` | `internal/ca` | CA bootstrap/persist, real CSR issuance chains to CA, `GetCACert` HTTP path |
-| Enrollment profile builder + PKCS7 sign | `internal/profile` | plist round-trips; MDM↔SCEP UUID linkage; signature verifies |
-| APNs push + push-cert loader | `internal/push` | live smoke: topic extracted, expiry parsed, stored |
-| `/enroll` handler | `internal/enroll` | 503 without cert; serves plutil-valid profile with topic |
-| `pushcert import`, `enqueue` CLIs | `cmd/cairn` | live smoke end-to-end |
+| CA modes: generate / import / external | `internal/ca`, `internal/config` | import chains to supplied CA; external delegates SCEP (no `/scep`); unit + live smoke |
+| `cairn ca export` + `GET /ca` | `cmd/cairn`, `internal/server` | live smoke (out-of-band root trust) |
+| `cairn init` one-command setup | `cmd/cairn/init.go` | live: init → serve boots, CA persisted, admin created |
+| Local auth (argon2id) + explicit RBAC | `internal/auth` | create/authenticate/duplicate/first-run/role-ranking |
+| ACME + files + proxy TLS | `cmd/cairn/tls.go` | files mode serves real HTTPS live; acme = autocert wiring |
+| Event-driven device inventory | `internal/mdmcore/events.go`, `internal/storage/sqlite/devices.go` | full projection lifecycle (enroll/token/checkout/counts) |
+| Admin console: sessions, login, RBAC, HIG UI | `internal/auth/session.go`, `internal/web` | login flow, RBAC redirect, dashboard/devices, 401; live smoke |
+| Device detail + refresh action + APNs status card | `internal/web`, `internal/mdmcore` (Commander) | live: APNs expiry warning, detail 404, enqueue-from-UI |
 
-Design posture: NanoMDM/nanolib/scep are linked libraries behind `internal/`
-packages (not forked); the SQLite `AllStorage` is additive and upstreamable.
+### PKI story (no PKI required)
+- **generate** — self-signed CA on first boot (zero-PKI default; non-profits).
+- **import** — embedded SCEP CA signing with an existing cert+key (Microsoft AD
+  CS subordinate / bring-your-own); device certs chain to the corporate root.
+- **external** — delegate to a third-party SCEP server (OpenXPKI, NDES).
+Server TLS: built-in ACME (turnkey) / files / proxy. `cairn init` never surfaces
+PKI decisions unless you opt into import/external.
 
-### Remaining Phase 1 exit criterion — manual real-device gate ⏳
-"A real device enrolls against a fresh binary and receives a pushed profile"
-cannot be run in CI: it needs Apple hardware, a real APNs push certificate
-(mdmcert.download or ABM), and public-trusted TLS. Procedure when hardware is
-available:
+### What the admin console does today
+Sign in → dashboard (enrolled count, active-24h, APNs cert health with renewal
+warning, enrollment URL) → device list → device detail with a working "Refresh
+device info" action (queues DeviceInformation + APNs push). Light-first,
+Apple-HIG-inspired, server-rendered, no JS build.
 
-1. Obtain a real APNs MDM push certificate; `cairn pushcert import -cert … -key …`.
-2. Run `cairn serve` behind a reverse proxy terminating a publicly-trusted TLS
-   cert for the `public_url` host (`tls.mode = proxy` today; built-in ACME lands
-   in Phase 2).
-3. On a Mac/iPhone, download the profile from `GET /enroll` and install it.
-   Expect: SCEP issues a device identity from the embedded CA, the device
-   enrolls at `/mdm`, and a row appears in storage.
-4. `cairn enqueue -id <UDID> -type InstallProfile -profile <mobileconfig>` and
-   confirm the device receives it (APNs push wakes it; result recorded).
-
-## Next — Phase 2 (admin app)
-Local auth + sessions + CSRF + RBAC, HIG design system, device inventory +
-command console, profile library + assignments (event-driven reconciler),
-`cairn init` wizard, built-in ACME TLS.
+## Remaining
+- **Phase 1 real-device gate** ⏳ — needs Apple hardware + real APNs cert +
+  public TLS. Procedure: import the real push cert; run `cairn serve` behind
+  public TLS (or `tls.mode=acme` with public DNS); install the profile from
+  `GET /enroll` on a Mac/iPhone; confirm SCEP issuance + `/mdm` check-in + a
+  device row; `cairn enqueue -id <UDID> -type InstallProfile -profile p.mobileconfig`.
+- **Phase 2 remainder** — profile library + upload, group assignment + reconciler
+  (auto-push on enroll), command-result history in the UI, session-cleanup job.
+- **Phase 3+** — OIDC/LDAP/Kerberos providers, DZsec migration (`import --from-mysql`),
+  DDM, ABM/ADE, packaging polish.
