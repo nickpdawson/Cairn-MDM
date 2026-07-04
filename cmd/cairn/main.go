@@ -42,6 +42,8 @@ func main() {
 	switch cmd {
 	case "serve":
 		err = runServe(ctx, args)
+	case "init":
+		err = runInit(ctx, args)
 	case "migrate":
 		err = runMigrate(ctx, args)
 	case "pushcert":
@@ -73,6 +75,7 @@ Usage:
   cairn <command> [flags]
 
 Commands:
+  init       one-command setup: config, CA, admin, enrollment URL
   serve      run the MDM server
   migrate    apply database migrations and exit
   pushcert   manage the APNs push certificate (import)

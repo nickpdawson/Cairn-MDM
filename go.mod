@@ -3,6 +3,7 @@ module github.com/dzsec/cairn
 go 1.26
 
 require (
+	github.com/alexedwards/argon2id v1.0.0
 	github.com/go-kit/kit v0.4.0
 	github.com/micromdm/nanolib v0.5.0
 	github.com/micromdm/nanomdm v0.9.0
