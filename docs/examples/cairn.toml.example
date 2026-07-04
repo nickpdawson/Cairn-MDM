@@ -35,13 +35,21 @@ path = "/var/db/cairn/cairn.db"
 # dsn_env  = "CAIRN_STORAGE_DSN"
 
 [ca]
-# embedded — Cairn runs its own SCEP CA and issues device identity certs.
-# external — point enrollment at a third-party SCEP server (e.g. OpenXPKI).
-mode = "embedded"
+# generate — Cairn self-generates a device-identity CA on first boot (zero-PKI
+#            default; nothing else to configure).
+# import   — Cairn runs its own SCEP CA but signs with an existing CA cert+key
+#            (e.g. a subordinate CA from Microsoft AD CS), so device certs chain
+#            to your corporate root.
+# external — delegate issuance to a third-party SCEP server (OpenXPKI, NDES).
+mode = "generate"
+
+# [ca.import]
+# cert_file = "/etc/cairn/pki/issuing-ca.crt"
+# key_file  = "/etc/cairn/pki/issuing-ca.key"
 
 # [ca.external]
 # scep_url = "http://scep.example.com/scep/mdm"
-# ca_chain_file = "/etc/cairn/ca-chain.pem"
+# ca_chain_file = "/etc/cairn/ca-chain.pem"   # trust anchor installed on devices
 # crl_url = "http://scep.example.com/crl"
 # challenge_env = "CAIRN_SCEP_CHALLENGE"
 

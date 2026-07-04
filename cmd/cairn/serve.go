@@ -54,12 +54,6 @@ func runServe(ctx context.Context, args []string) error {
 		return err
 	}
 
-	// TLS beyond plaintext proxy mode arrives in Phase 2; fail loudly rather
-	// than silently serving cleartext where TLS was requested.
-	if cfg.Server.TLS.Mode != config.TLSProxy {
-		return fmt.Errorf("tls.mode %q not yet implemented (Phase 2); use tls.mode=proxy behind a terminating reverse proxy for now", cfg.Server.TLS.Mode)
-	}
-
 	srv := server.New(cfg, log, db, deps)
 	httpSrv := &http.Server{
 		Addr:              cfg.Server.Listen,
@@ -67,10 +61,15 @@ func runServe(ctx context.Context, args []string) error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
+	serveTLS, err := configureTLS(cfg, httpSrv, log)
+	if err != nil {
+		return err
+	}
+
 	errCh := make(chan error, 1)
 	go func() {
 		log.Info("listening", "addr", cfg.Server.Listen, "tls", cfg.Server.TLS.Mode)
-		if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := serveTLS(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
 	}()
