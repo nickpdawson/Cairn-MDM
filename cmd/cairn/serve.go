@@ -9,11 +9,13 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/dzsec/cairn/internal/auth"
 	"github.com/dzsec/cairn/internal/config"
 	"github.com/dzsec/cairn/internal/mdmcore"
 	"github.com/dzsec/cairn/internal/server"
 	"github.com/dzsec/cairn/internal/storage/sqlite"
 	"github.com/dzsec/cairn/internal/version"
+	"github.com/dzsec/cairn/internal/web"
 )
 
 func runServe(ctx context.Context, args []string) error {
@@ -55,6 +57,16 @@ func runServe(ctx context.Context, args []string) error {
 	if _, err := wirePKI(ctx, cfg, db.SQL(), db, log, &deps); err != nil {
 		return err
 	}
+
+	// Admin console.
+	sessions := auth.NewSessionStore(db.SQL(), 12*time.Hour)
+	console, err := web.New(sessions, auth.NewLocalStore(db.SQL()), db,
+		web.Config{PublicURL: cfg.Server.PublicURL}, log)
+	if err != nil {
+		return err
+	}
+	deps.UI = console
+	log.Info("admin console ready", "path", "/admin")
 
 	srv := server.New(cfg, log, db, deps)
 	httpSrv := &http.Server{

@@ -1,0 +1,25 @@
+{{define "head"}}
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="/assets/app.css">
+<title>{{if .Title}}{{.Title}} · {{end}}Cairn</title>
+{{end}}
+
+{{define "topbar"}}
+<header class="topbar">
+  <span class="wordmark">▲ <span class="peak">Cairn</span></span>
+  <nav>
+    <a href="/admin"{{if eq .Title "Dashboard"}} class="active"{{end}}>Dashboard</a>
+    <a href="/admin/devices"{{if eq .Title "Devices"}} class="active"{{end}}>Devices</a>
+  </nav>
+  <span class="spacer"></span>
+  <span class="user">
+    {{with .User}}{{if .DisplayName}}{{.DisplayName}}{{else}}{{.Username}}{{end}} · {{.Role}}{{end}}
+    <form method="post" action="/logout" style="display:inline">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <button class="btn link" type="submit">Sign out</button>
+    </form>
+  </span>
+</header>
+{{end}}

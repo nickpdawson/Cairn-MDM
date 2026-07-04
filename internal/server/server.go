@@ -28,6 +28,13 @@ type Deps struct {
 	SCEP   http.Handler // embedded-CA SCEP handler (mounted at /scep)
 	Enroll http.Handler // enrollment profile handler (mounted at /enroll)
 	CA     http.Handler // CA trust-anchor download (mounted at GET /ca)
+	UI     UIRegistrar  // admin console; registers its own routes
+}
+
+// UIRegistrar registers admin-console routes on the server mux. Implementing
+// this interface keeps the server package from importing the web package.
+type UIRegistrar interface {
+	Register(mux *http.ServeMux)
 }
 
 // Server holds the mux and its dependencies.
@@ -77,6 +84,10 @@ func (s *Server) routes() {
 
 	if s.deps.CA != nil {
 		s.mux.Handle("GET /ca", s.deps.CA)
+	}
+
+	if s.deps.UI != nil {
+		s.deps.UI.Register(s.mux)
 	}
 }
 

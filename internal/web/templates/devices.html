@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>{{template "head" .}}</head>
+<body>
+  {{template "topbar" .}}
+  <main>
+    <h1>Devices</h1>
+    <div class="card">
+      {{if .Devices}}
+      <table>
+        <thead>
+          <tr><th>Device</th><th>Model</th><th>OS</th><th>Enrolled</th><th>Last seen</th></tr>
+        </thead>
+        <tbody>
+          {{range .Devices}}
+          <tr>
+            <td>
+              <span class="dot {{if .Enrolled}}on{{else}}off{{end}}"></span>
+              {{.DisplayName}}
+              <div class="sub mono">{{.Serial}}</div>
+            </td>
+            <td>{{if .Model}}{{.Model}}{{else}}—{{end}}</td>
+            <td>{{.Product}} {{.OSVersion}}</td>
+            <td class="sub">{{nullStr .EnrolledAt}}</td>
+            <td class="sub">{{nullStr .LastSeen}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <div class="empty">No devices enrolled yet.</div>
+      {{end}}
+    </div>
+  </main>
+</body>
+</html>

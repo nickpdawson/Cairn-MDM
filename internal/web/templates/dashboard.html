@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>{{template "head" .}}</head>
+<body>
+  {{template "topbar" .}}
+  <main>
+    <h1>Dashboard</h1>
+
+    <div class="stats">
+      <div class="card stat">
+        <div class="num">{{.Total}}</div>
+        <div class="label">Enrolled devices</div>
+      </div>
+      <div class="card stat">
+        <div class="num">{{.Active}}</div>
+        <div class="label">Active in last 24h</div>
+      </div>
+    </div>
+
+    <div class="card callout">
+      <span>📲</span>
+      <div>
+        <div>Enroll a device</div>
+        <div class="url">{{.EnrollmentURL}}</div>
+      </div>
+    </div>
+
+    <h2>Recent devices</h2>
+    <div class="card">
+      {{if .Recent}}
+      <table>
+        <thead><tr><th>Device</th><th>OS</th><th>Last seen</th></tr></thead>
+        <tbody>
+          {{range .Recent}}
+          <tr>
+            <td>
+              <span class="dot {{if .Enrolled}}on{{else}}off{{end}}"></span>
+              {{.DisplayName}}
+              <div class="sub mono">{{.Serial}}</div>
+            </td>
+            <td>{{.Product}} {{.OSVersion}}</td>
+            <td class="sub">{{nullStr .LastSeen}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <div class="empty">No devices enrolled yet.</div>
+      {{end}}
+    </div>
+  </main>
+</body>
+</html>
