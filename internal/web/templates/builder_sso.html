@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>{{template "head" .}}</head>
+<body>
+  {{template "topbar" .}}
+  <main>
+    <p><a href="/admin/profiles">← Profiles</a></p>
+    <h1>New Kerberos SSO profile</h1>
+
+    {{if .Error}}<div class="card callout error">{{.Error}}</div>{{end}}
+
+    <div class="card" style="padding:24px">
+      <form method="post" action="/admin/profiles/new/sso">
+        <input type="hidden" name="csrf" value="{{.CSRF}}">
+
+        <p><label>Display name<br><input type="text" name="display_name" placeholder="Kerberos SSO" size="40"></label></p>
+        <p><label>Kerberos realm<br><input type="text" name="realm" placeholder="EXAMPLE.ORG" required size="40"></label></p>
+        <p><label>Hosts (comma or newline separated)<br>
+          <textarea name="hosts" rows="4" cols="60" placeholder=".example.org&#10;intranet.example.org" required></textarea></label><br>
+          <span class="sub">Host suffixes SSO applies to. A leading dot matches subdomains.
+          Do not include this MDM server's own hostname — the extension intercepts matching
+          URLs, and browser SPNEGO to intercepted hosts breaks in Safari.</span>
+        </p>
+        <p>
+          <label><input type="checkbox" name="default_realm" checked> Default realm</label><br>
+          <label><input type="checkbox" name="use_site_auto_discovery" checked> Use site auto-discovery (AD sites)</label><br>
+          <label><input type="checkbox" name="allow_automatic_login" checked> Allow automatic login</label><br>
+          <label><input type="checkbox" name="sync_local_password"> Sync local account password (macOS)</label>
+        </p>
+
+        <p style="margin-top:20px"><button class="btn" type="submit">Create profile</button></p>
+      </form>
+    </div>
+  </main>
+</body>
+</html>

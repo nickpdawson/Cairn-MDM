@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>{{template "head" .}}</head>
+<body>
+  {{template "topbar" .}}
+  <main>
+    <p><a href="/admin/profiles">← Profiles</a></p>
+    <h1>New Wi-Fi profile</h1>
+
+    {{if .Error}}<div class="card callout error">{{.Error}}</div>{{end}}
+
+    <div class="card" style="padding:24px">
+      <form method="post" action="/admin/profiles/new/wifi">
+        <input type="hidden" name="csrf" value="{{.CSRF}}">
+
+        <h2 style="margin-top:0">Network</h2>
+        <p><label>Display name<br><input type="text" name="display_name" placeholder="Office Wi-Fi" size="40"></label></p>
+        <p><label>SSID<br><input type="text" name="ssid" required size="40"></label></p>
+        <p>
+          <label><input type="checkbox" name="autojoin" checked> Auto-join</label>
+          &nbsp;&nbsp;
+          <label><input type="checkbox" name="hidden"> Hidden network</label>
+        </p>
+
+        <h2>Security</h2>
+        <p>
+          <label><input type="radio" name="security" value="psk" checked onclick="toggleSec()"> WPA/WPA2/WPA3 Personal (password)</label><br>
+          <label><input type="radio" name="security" value="eap-tls" onclick="toggleSec()"> WPA2/WPA3 Enterprise — EAP-TLS (certificate, via SCEP)</label>
+        </p>
+
+        <div id="sec-psk">
+          <p><label>Password<br><input type="password" name="password" size="40"></label></p>
+        </div>
+
+        <div id="sec-eap" style="display:none">
+          <p class="sub">The profile bundles everything EAP-TLS needs — the RADIUS trust
+          anchor(s), a SCEP identity request, and the network payload referencing both —
+          so the device can join with no manual trust steps.</p>
+          <p><label>SCEP URL<br><input type="text" name="scep_url" value="{{.SCEPURL}}" size="60"></label></p>
+          <p><label>SCEP challenge (if required)<br><input type="password" name="scep_challenge" size="40"></label></p>
+          <p><label>Certificate subject CN<br><input type="text" name="subject_cn" placeholder="%SerialNumber%.wifi.example.org" size="60"></label>
+          <span class="sub">Apple substitutes %SerialNumber%, %HardwareUUID%, etc. at install time.</span></p>
+          <p><label>Key size<br>
+            <select name="key_size"><option value="2048" selected>2048</option><option value="4096">4096</option></select>
+          </label></p>
+          <p><label>RADIUS server names (comma-separated, optional)<br>
+            <input type="text" name="trusted_server_names" placeholder="radius1.example.org, radius2.example.org" size="60"></label></p>
+          {{if .HasAnchors}}
+          <p><label><input type="checkbox" name="use_cairn_anchors" checked> Trust Cairn's CA anchors for the RADIUS server</label></p>
+          {{end}}
+          <p><label>Additional RADIUS CA chain (PEM, optional)<br>
+            <textarea name="anchors_pem" rows="5" cols="70" placeholder="-----BEGIN CERTIFICATE-----"></textarea></label></p>
+        </div>
+
+        <p style="margin-top:20px"><button class="btn" type="submit">Create profile</button></p>
+      </form>
+    </div>
+  </main>
+  <script>
+    function toggleSec() {
+      var eap = document.querySelector('input[name=security][value="eap-tls"]').checked;
+      document.getElementById('sec-psk').style.display = eap ? 'none' : '';
+      document.getElementById('sec-eap').style.display = eap ? '' : 'none';
+    }
+  </script>
+</body>
+</html>

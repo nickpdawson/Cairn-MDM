@@ -24,9 +24,18 @@ import (
 //	external        — no /scep; the enrollment profile installs the configured
 //	                  trust chain and points SCEP at ca.external.scep_url.
 //
-// It mutates deps and returns the authority (nil in external mode) so callers
-// can, e.g., reuse the CA for profile signing later.
-func wirePKI(ctx context.Context, cfg config.Config, db *sql.DB, topics enroll.TopicProvider, log *slog.Logger, deps *server.Deps) (*ca.CA, error) {
+// It mutates deps and returns a summary of the wired PKI so other parts of the
+// binary (the console's profile builders, future profile signing) can reuse the
+// SCEP endpoint, challenge, and trust anchors without re-deriving them.
+type pkiResult struct {
+	Authority *ca.CA // nil in external mode
+	Org       string // reverse-DNS identifier root, e.g. "cairn.mdm.example.org"
+	SCEPURL   string
+	Challenge string
+	Anchors   [][]byte // trust-anchor certs (DER)
+}
+
+func wirePKI(ctx context.Context, cfg config.Config, db *sql.DB, topics enroll.TopicProvider, log *slog.Logger, deps *server.Deps) (*pkiResult, error) {
 	host := publicHost(cfg.Server.PublicURL)
 	org := "cairn." + host
 
@@ -71,7 +80,13 @@ func wirePKI(ctx context.Context, cfg config.Config, db *sql.DB, topics enroll.T
 		log.Info("embedded CA ready", "mode", cfg.CA.Mode, "scep_path", "/scep",
 			"ca_cn", authority.Certificate().Subject.CommonName)
 		log.Info("enrollment endpoint ready", "path", "/enroll")
-		return authority, nil
+		return &pkiResult{
+			Authority: authority,
+			Org:       org,
+			SCEPURL:   cfg.Server.PublicURL + "/scep",
+			Challenge: cfg.CA.External.Challenge,
+			Anchors:   [][]byte{authority.Certificate().Raw},
+		}, nil
 	}
 
 	// external mode: delegate SCEP to a third-party server (OpenXPKI, NDES).
@@ -95,7 +110,12 @@ func wirePKI(ctx context.Context, cfg config.Config, db *sql.DB, topics enroll.T
 	deps.CA = caDownloadHandler(anchors)
 	log.Info("external SCEP configured", "scep_url", cfg.CA.External.SCEPURL, "trust_anchors", len(anchors))
 	log.Info("enrollment endpoint ready", "path", "/enroll")
-	return nil, nil
+	return &pkiResult{
+		Org:       org,
+		SCEPURL:   cfg.CA.External.SCEPURL,
+		Challenge: cfg.CA.External.Challenge,
+		Anchors:   anchors,
+	}, nil
 }
 
 // caDownloadHandler serves the trust anchors as a PEM bundle at GET /ca, so a

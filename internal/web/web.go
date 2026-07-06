@@ -87,9 +87,15 @@ type Reconciler interface {
 	ReconcileGroup(ctx context.Context, groupID int64) error
 }
 
-// Config holds display settings.
+// Config holds display settings and the defaults the profile builders prefill.
 type Config struct {
 	PublicURL string // for showing the enrollment URL
+
+	// Builder defaults, from the wired PKI:
+	Organization  string   // reverse-DNS identifier root for built profiles
+	SCEPURL       string   // device-identity SCEP endpoint
+	SCEPChallenge string   // its static challenge (may be empty)
+	CAAnchorsDER  [][]byte // Cairn's trust anchors (embedded CA cert or external chain)
 }
 
 // App is the admin console.
@@ -144,6 +150,12 @@ func (a *App) Register(mux *http.ServeMux) {
 	mux.Handle("GET /admin/profiles/{id}", a.requireRole(auth.RoleOperator, a.handleProfileDetail))
 	mux.Handle("GET /admin/profiles/{id}/download", a.requireRole(auth.RoleOperator, a.handleProfileDownload))
 	mux.Handle("POST /admin/profiles/{id}/delete", a.requireRole(auth.RoleAdmin, a.handleProfileDelete))
+
+	// Profile builders (typed payloads generated into the library).
+	mux.Handle("GET /admin/profiles/new/wifi", a.requireRole(auth.RoleAdmin, a.handleBuilderWiFiForm))
+	mux.Handle("POST /admin/profiles/new/wifi", a.requireRole(auth.RoleAdmin, a.handleBuilderWiFi))
+	mux.Handle("GET /admin/profiles/new/sso", a.requireRole(auth.RoleAdmin, a.handleBuilderSSOForm))
+	mux.Handle("POST /admin/profiles/new/sso", a.requireRole(auth.RoleAdmin, a.handleBuilderSSO))
 
 	// Groups + assignments. Membership/assignment changes trigger the
 	// reconciler, which pushes profiles — admin-only, like the library.

@@ -56,7 +56,8 @@ func runServe(ctx context.Context, args []string) error {
 	deps := server.Deps{MDM: core.Handler()}
 
 	// Configure SCEP + enrollment per ca.mode (generate | import | external).
-	if _, err := wirePKI(ctx, cfg, db.SQL(), db, log, &deps); err != nil {
+	pki, err := wirePKI(ctx, cfg, db.SQL(), db, log, &deps)
+	if err != nil {
 		return err
 	}
 
@@ -88,7 +89,13 @@ func runServe(ctx context.Context, args []string) error {
 	core.OnPushable(reconciler.DeviceNowPushable)
 
 	console, err := web.New(sessions, auth.NewLocalStore(db.SQL()), db, commander, reconciler,
-		web.Config{PublicURL: cfg.Server.PublicURL}, log)
+		web.Config{
+			PublicURL:     cfg.Server.PublicURL,
+			Organization:  pki.Org,
+			SCEPURL:       pki.SCEPURL,
+			SCEPChallenge: pki.Challenge,
+			CAAnchorsDER:  pki.Anchors,
+		}, log)
 	if err != nil {
 		return err
 	}
