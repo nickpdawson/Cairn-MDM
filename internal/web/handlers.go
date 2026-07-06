@@ -122,10 +122,15 @@ func (a *App) handleDeviceDetail(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	commands, err := a.profiles.ListCommands(r.Context(), d.ID, 25)
+	if err != nil {
+		a.log.Error("list commands", "id", d.ID, "err", err)
+	}
 	a.render(w, r, http.StatusOK, "device.html", map[string]any{
-		"Title":  d.DisplayName(),
-		"Device": d,
-		"Flash":  r.URL.Query().Get("flash"),
+		"Title":    d.DisplayName(),
+		"Device":   d,
+		"Commands": commands,
+		"Flash":    r.URL.Query().Get("flash"),
 	})
 }
 

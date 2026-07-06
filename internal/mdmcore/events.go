@@ -2,6 +2,7 @@ package mdmcore
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"github.com/micromdm/nanomdm/mdm"
@@ -41,13 +42,23 @@ type DeviceProjector interface {
 type EventService struct {
 	service.CheckinAndCommandService
 	proj DeviceProjector
+	rec  CommandRecorder
 	log  *slog.Logger
+
+	// onPushable, if set, is called (in its own goroutine) whenever a device
+	// completes a TokenUpdate — i.e. it just became pushable. The assignment
+	// reconciler hooks here to auto-push assigned profiles on enrollment.
+	onPushable func(id string)
 }
 
-// NewEventService wraps inner with projection side effects.
-func NewEventService(inner service.CheckinAndCommandService, proj DeviceProjector, log *slog.Logger) *EventService {
-	return &EventService{CheckinAndCommandService: inner, proj: proj, log: log}
+// NewEventService wraps inner with projection + history side effects. proj and
+// rec may be nil.
+func NewEventService(inner service.CheckinAndCommandService, proj DeviceProjector, rec CommandRecorder, log *slog.Logger) *EventService {
+	return &EventService{CheckinAndCommandService: inner, proj: proj, rec: rec, log: log}
 }
+
+// OnPushable registers the became-pushable hook (see field doc).
+func (s *EventService) OnPushable(fn func(id string)) { s.onPushable = fn }
 
 func (s *EventService) Authenticate(r *mdm.Request, m *mdm.Authenticate) error {
 	if err := s.CheckinAndCommandService.Authenticate(r, m); err != nil {
@@ -60,8 +71,10 @@ func (s *EventService) Authenticate(r *mdm.Request, m *mdm.Authenticate) error {
 		Topic:  m.Topic,
 	}
 	enrichFromRaw(&rec, m.Raw)
-	if err := s.proj.DeviceEnrolled(r.Context(), rec); err != nil {
-		s.log.Warn("device projection (enroll) failed", "id", r.ID, "err", err)
+	if s.proj != nil {
+		if err := s.proj.DeviceEnrolled(r.Context(), rec); err != nil {
+			s.log.Warn("device projection (enroll) failed", "id", r.ID, "err", err)
+		}
 	}
 	return nil
 }
@@ -70,8 +83,15 @@ func (s *EventService) TokenUpdate(r *mdm.Request, m *mdm.TokenUpdate) error {
 	if err := s.CheckinAndCommandService.TokenUpdate(r, m); err != nil {
 		return err
 	}
-	if err := s.proj.DeviceTokenUpdated(r.Context(), r.ID); err != nil {
-		s.log.Warn("device projection (token update) failed", "id", r.ID, "err", err)
+	if s.proj != nil {
+		if err := s.proj.DeviceTokenUpdated(r.Context(), r.ID); err != nil {
+			s.log.Warn("device projection (token update) failed", "id", r.ID, "err", err)
+		}
+	}
+	// The device can now receive pushes — run the hook off the request path so
+	// reconciliation (enqueue + APNs) never delays the check-in response.
+	if s.onPushable != nil {
+		go s.onPushable(r.ID)
 	}
 	return nil
 }
@@ -80,8 +100,10 @@ func (s *EventService) CheckOut(r *mdm.Request, m *mdm.CheckOut) error {
 	if err := s.CheckinAndCommandService.CheckOut(r, m); err != nil {
 		return err
 	}
-	if err := s.proj.DeviceCheckedOut(r.Context(), r.ID); err != nil {
-		s.log.Warn("device projection (checkout) failed", "id", r.ID, "err", err)
+	if s.proj != nil {
+		if err := s.proj.DeviceCheckedOut(r.Context(), r.ID); err != nil {
+			s.log.Warn("device projection (checkout) failed", "id", r.ID, "err", err)
+		}
 	}
 	return nil
 }
@@ -89,11 +111,36 @@ func (s *EventService) CheckOut(r *mdm.Request, m *mdm.CheckOut) error {
 func (s *EventService) CommandAndReportResults(r *mdm.Request, m *mdm.CommandResults) (*mdm.Command, error) {
 	cmd, err := s.CheckinAndCommandService.CommandAndReportResults(r, m)
 	if err == nil {
-		if perr := s.proj.DeviceCheckedIn(r.Context(), r.ID); perr != nil {
-			s.log.Warn("device projection (checkin) failed", "id", r.ID, "err", perr)
+		if s.proj != nil {
+			if perr := s.proj.DeviceCheckedIn(r.Context(), r.ID); perr != nil {
+				s.log.Warn("device projection (checkin) failed", "id", r.ID, "err", perr)
+			}
+		}
+		// "Idle" is the device asking for work, not a result; everything else
+		// (Acknowledged/Error/NotNow/CommandFormatError) resolves a history row.
+		if s.rec != nil && m.Status != "Idle" && m.CommandUUID != "" {
+			if rerr := s.rec.CommandResult(r.Context(), r.ID, m.CommandUUID, m.Status, firstError(m.ErrorChain)); rerr != nil {
+				s.log.Warn("command history (result) failed", "id", r.ID, "uuid", m.CommandUUID, "err", rerr)
+			}
 		}
 	}
 	return cmd, err
+}
+
+// firstError summarizes an ErrorChain for the history row.
+func firstError(chain []mdm.ErrorChain) string {
+	if len(chain) == 0 {
+		return ""
+	}
+	e := chain[0]
+	desc := e.LocalizedDescription
+	if desc == "" {
+		desc = e.USEnglishDescription
+	}
+	if desc == "" {
+		return fmt.Sprintf("%s error %d", e.ErrorDomain, e.ErrorCode)
+	}
+	return desc
 }
 
 // enrichFromRaw pulls the nice-to-have device attributes (name, model, OS) out

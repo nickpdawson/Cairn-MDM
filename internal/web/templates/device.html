@@ -32,6 +32,36 @@
       <input type="hidden" name="csrf" value="{{.CSRF}}">
       <button class="btn" type="submit">Refresh device info</button>
     </form>
+
+    <h2>Command history</h2>
+    <div class="card">
+      {{if .Commands}}
+      <table>
+        <thead>
+          <tr><th>Command</th><th>Status</th><th>Sent</th><th>Result</th></tr>
+        </thead>
+        <tbody>
+          {{range .Commands}}
+          <tr>
+            <td>
+              {{.RequestType}}
+              <div class="sub mono">{{.CommandUUID}}</div>
+            </td>
+            <td>
+              <span class="dot {{if eq .Status "Acknowledged"}}on{{else if .Pending}}wait{{else}}off{{end}}"></span>
+              {{.Status}}
+              {{if .Error}}<div class="sub">{{.Error}}</div>{{end}}
+            </td>
+            <td class="sub">{{.SentAt}}</td>
+            <td class="sub">{{nullStr .ResultAt}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <div class="empty">No commands sent to this device yet.</div>
+      {{end}}
+    </div>
   </main>
 </body>
 </html>

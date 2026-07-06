@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>{{template "head" .}}</head>
+<body>
+  {{template "topbar" .}}
+  <main>
+    <h1>Profiles</h1>
+
+    {{if .Flash}}<div class="card callout">{{.Flash}}</div>{{end}}
+    {{if .Error}}<div class="card callout error">{{.Error}}</div>{{end}}
+
+    <div class="card">
+      {{if .Profiles}}
+      <table>
+        <thead>
+          <tr><th>Profile</th><th>Payloads</th><th>Source</th><th>Updated</th></tr>
+        </thead>
+        <tbody>
+          {{range .Profiles}}
+          <tr>
+            <td>
+              <a href="/admin/profiles/{{.ID}}">{{.Name}}</a>
+              <div class="sub mono">{{.Identifier}}</div>
+            </td>
+            <td>{{range .Types}}<span class="tag">{{.}}</span> {{end}}</td>
+            <td class="sub">{{.Source}}</td>
+            <td class="sub">{{.UpdatedAt}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <div class="empty">No profiles in the library yet. Upload a .mobileconfig below.</div>
+      {{end}}
+    </div>
+
+    {{if .User.Role.AtLeast "admin"}}
+    <h2>Add a profile</h2>
+    <div class="card">
+      <form method="post" action="/admin/profiles/upload" enctype="multipart/form-data">
+        <input type="hidden" name="csrf" value="{{.CSRF}}">
+        <p>
+          <input type="file" name="profile" accept=".mobileconfig,application/x-apple-aspen-config" required>
+          <button class="btn" type="submit">Upload</button>
+        </p>
+        <p class="sub">Re-uploading a profile with the same PayloadIdentifier replaces it in place.</p>
+      </form>
+    </div>
+    {{end}}
+  </main>
+</body>
+</html>

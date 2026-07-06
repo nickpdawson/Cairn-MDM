@@ -49,7 +49,7 @@ func runServe(ctx context.Context, args []string) error {
 	// the device-inventory projector — enrollments update the inventory as they
 	// happen (no polling).
 	nanoStore := db.NanoStorage(log)
-	core := mdmcore.New(nanoStore, mdmcore.NewLogAdapter(log), db, log)
+	core := mdmcore.New(nanoStore, mdmcore.NewLogAdapter(log), db, db, log)
 	log.Info("mdm service ready", "path", cfg.Server.MDMPath)
 
 	deps := server.Deps{MDM: core.Handler()}
@@ -61,9 +61,27 @@ func runServe(ctx context.Context, args []string) error {
 
 	// Admin console.
 	pusher := push.NewPusher(nanoStore, mdmcore.NewLogAdapter(log))
-	commander := mdmcore.NewCommander(nanoStore, pusher)
+	commander := mdmcore.NewCommander(nanoStore, pusher).WithRecorder(db, log)
 	sessions := auth.NewSessionStore(db.SQL(), 12*time.Hour)
-	console, err := web.New(sessions, auth.NewLocalStore(db.SQL()), db, db, commander,
+
+	// Session cleanup: purge expired rows hourly.
+	go func() {
+		t := time.NewTicker(time.Hour)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if n, err := sessions.DeleteExpired(ctx); err != nil {
+					log.Warn("session cleanup failed", "err", err)
+				} else if n > 0 {
+					log.Info("session cleanup", "purged", n)
+				}
+			}
+		}
+	}()
+	console, err := web.New(sessions, auth.NewLocalStore(db.SQL()), db, db, db, commander,
 		web.Config{PublicURL: cfg.Server.PublicURL}, log)
 	if err != nil {
 		return err

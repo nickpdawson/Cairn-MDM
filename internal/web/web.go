@@ -40,9 +40,21 @@ type SettingsSource interface {
 	GetSetting(ctx context.Context, key string) (string, error)
 }
 
+// ProfileStore is the configuration-profile library plus per-device command
+// history (both live in the same storage).
+type ProfileStore interface {
+	SaveProfile(ctx context.Context, p sqlite.Profile) (int64, error)
+	ListProfiles(ctx context.Context) ([]sqlite.Profile, error)
+	GetProfile(ctx context.Context, id int64) (sqlite.Profile, error)
+	DeleteProfile(ctx context.Context, id int64) error
+	ListCommands(ctx context.Context, deviceID string, limit int) ([]sqlite.CommandEntry, error)
+}
+
 // Commander runs device actions from the console.
 type Commander interface {
 	SendDeviceInformation(ctx context.Context, ids ...string) error
+	SendInstallProfile(ctx context.Context, profile []byte, ids ...string) error
+	SendRemoveProfile(ctx context.Context, identifier string, ids ...string) error
 }
 
 // Config holds display settings.
@@ -56,6 +68,7 @@ type App struct {
 	auth     Authenticator
 	devices  DeviceSource
 	settings SettingsSource
+	profiles ProfileStore
 	cmd      Commander
 	cfg      Config
 	tmpl     *template.Template
@@ -63,12 +76,12 @@ type App struct {
 }
 
 // New builds the console.
-func New(sessions *auth.SessionStore, authn Authenticator, devices DeviceSource, settings SettingsSource, cmd Commander, cfg Config, log *slog.Logger) (*App, error) {
+func New(sessions *auth.SessionStore, authn Authenticator, devices DeviceSource, settings SettingsSource, profiles ProfileStore, cmd Commander, cfg Config, log *slog.Logger) (*App, error) {
 	tmpl, err := template.New("").Funcs(funcMap).ParseFS(files, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}
-	return &App{sessions: sessions, auth: authn, devices: devices, settings: settings, cmd: cmd, cfg: cfg, tmpl: tmpl, log: log}, nil
+	return &App{sessions: sessions, auth: authn, devices: devices, settings: settings, profiles: profiles, cmd: cmd, cfg: cfg, tmpl: tmpl, log: log}, nil
 }
 
 // Register mounts the console routes on mux. Implementing this interface keeps
@@ -87,6 +100,14 @@ func (a *App) Register(mux *http.ServeMux) {
 	mux.Handle("GET /admin/devices", a.requireRole(auth.RoleOperator, a.handleDevices))
 	mux.Handle("GET /admin/devices/{id}", a.requireRole(auth.RoleOperator, a.handleDeviceDetail))
 	mux.Handle("POST /admin/devices/{id}/refresh", a.requireRole(auth.RoleOperator, a.handleDeviceRefresh))
+
+	// Profile library. Viewing/pushing is operator work; changing the library
+	// (upload/delete) is admin-only.
+	mux.Handle("GET /admin/profiles", a.requireRole(auth.RoleOperator, a.handleProfiles))
+	mux.Handle("POST /admin/profiles/upload", a.requireRole(auth.RoleAdmin, a.handleProfileUpload))
+	mux.Handle("GET /admin/profiles/{id}", a.requireRole(auth.RoleOperator, a.handleProfileDetail))
+	mux.Handle("GET /admin/profiles/{id}/download", a.requireRole(auth.RoleOperator, a.handleProfileDownload))
+	mux.Handle("POST /admin/profiles/{id}/delete", a.requireRole(auth.RoleAdmin, a.handleProfileDelete))
 
 	// Bare "/" redirects to the console.
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {

@@ -49,7 +49,7 @@ func TestDeviceProjectionLifecycle(t *testing.T) {
 	}
 	defer db.Close()
 
-	svc := mdmcore.NewEventService(stubService{}, db, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	svc := mdmcore.NewEventService(stubService{}, db, db, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	// Authenticate — device appears in inventory with attributes parsed from Raw.
 	rawAuth := []byte(`<?xml version="1.0"?><plist version="1.0"><dict>

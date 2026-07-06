@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>{{template "head" .}}</head>
+<body>
+  {{template "topbar" .}}
+  <main>
+    <p><a href="/admin/profiles">← Profiles</a></p>
+    <h1>{{.Profile.Name}}</h1>
+
+    {{if .Flash}}<div class="card callout" style="margin-top:0">{{.Flash}}</div>{{end}}
+    {{if .Error}}<div class="card callout error" style="margin-top:0">{{.Error}}</div>{{end}}
+
+    <div class="card" style="margin-top:16px">
+      <table>
+        <tbody>
+          <tr><th style="width:180px">Identifier</th><td class="mono">{{.Profile.Identifier}}</td></tr>
+          <tr><th>UUID</th><td class="mono">{{.Profile.UUID}}</td></tr>
+          <tr><th>Organization</th><td>{{if .Profile.Organization}}{{.Profile.Organization}}{{else}}—{{end}}</td></tr>
+          <tr><th>Payloads</th><td>{{range .Profile.Types}}<span class="tag">{{.}}</span> {{end}}</td></tr>
+          <tr><th>Source</th><td class="sub">{{.Profile.Source}}</td></tr>
+          <tr><th>Size</th><td class="sub">{{.Size}} bytes</td></tr>
+          <tr><th>Created</th><td class="sub">{{.Profile.CreatedAt}}</td></tr>
+          <tr><th>Updated</th><td class="sub">{{.Profile.UpdatedAt}}</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Actions</h2>
+    <p>
+      <a class="btn" href="/admin/profiles/{{.Profile.ID}}/download">Download</a>
+    </p>
+    {{if .User.Role.AtLeast "admin"}}
+    <form method="post" action="/admin/profiles/{{.Profile.ID}}/delete"
+          onsubmit="return confirm('Remove this profile from the library? Devices that have it installed keep it.')">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <button class="btn danger" type="submit">Delete from library</button>
+    </form>
+    {{end}}
+  </main>
+</body>
+</html>
