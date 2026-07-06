@@ -24,6 +24,12 @@ profile builder + PKCS7 signing, APNs push + push-cert loader, `/enroll`, and th
 | Event-driven device inventory | `internal/mdmcore/events.go`, `internal/storage/sqlite/devices.go` | full projection lifecycle (enroll/token/checkout/counts) |
 | Admin console: sessions, login, RBAC, HIG UI | `internal/auth/session.go`, `internal/web` | login flow, RBAC redirect, dashboard/devices, 401; live smoke |
 | Device detail + refresh action + APNs status card | `internal/web`, `internal/mdmcore` (Commander) | live: APNs expiry warning, detail 404, enqueue-from-UI |
+| Profile library (upload/download/delete, signed-CMS aware) | `internal/profile/parse.go`, `internal/storage/sqlite/profiles.go`, `internal/web/profiles.go` | unit + web tests; upsert-by-PayloadIdentifier semantics |
+| Command history (sent at enqueue, resolved at check-in) | `internal/mdmcore` (CommandRecorder), `internal/storage/sqlite/commands.go` | unit tests; device page shows status + ErrorChain summary |
+| Groups + assignments + event-driven reconciler | `internal/assign`, `internal/storage/sqlite/groups.go` | full lifecycle test: push-once, ack→installed, re-upload re-arms, failed no-retry, pushable-only fan-out |
+| Wi-Fi builder (PSK + EAP-TLS w/ SCEP identity + RADIUS anchors in one profile) | `internal/profile/payloads.go`, `internal/web/builders.go` | unit (UUID cross-refs) + web + live smoke |
+| Kerberos SSO builder (com.apple.extensiblesso) | same | unit + web + live smoke |
+| Session-cleanup job (hourly) | `cmd/cairn/serve.go` | — |
 
 ### PKI story (no PKI required)
 - **generate** — self-signed CA on first boot (zero-PKI default; non-profits).
@@ -35,9 +41,17 @@ PKI decisions unless you opt into import/external.
 
 ### What the admin console does today
 Sign in → dashboard (enrolled count, active-24h, APNs cert health with renewal
-warning, enrollment URL) → device list → device detail with a working "Refresh
-device info" action (queues DeviceInformation + APNs push). Light-first,
+warning, enrollment URL) → device list → device detail (refresh action, group
+memberships, command history with results) → profile library (upload a
+.mobileconfig or build Wi-Fi/Kerberos-SSO profiles from forms) → groups
+(assign profiles, add devices — assigned profiles push automatically when a
+device enrolls or when assignments change; no polling). Light-first,
 Apple-HIG-inspired, server-rendered, no JS build.
+
+Deliberate policies: unassign/remove/delete never auto-remove installed
+profiles (remote Wi-Fi removal can strand a device — removal is an explicit
+RemoveProfile command); failed installs are not auto-retried (re-upload
+re-arms them).
 
 ## Remaining
 - **Phase 1 real-device gate** ⏳ — needs Apple hardware + real APNs cert +
@@ -45,7 +59,8 @@ Apple-HIG-inspired, server-rendered, no JS build.
   public TLS (or `tls.mode=acme` with public DNS); install the profile from
   `GET /enroll` on a Mac/iPhone; confirm SCEP issuance + `/mdm` check-in + a
   device row; `cairn enqueue -id <UDID> -type InstallProfile -profile p.mobileconfig`.
-- **Phase 2 remainder** — profile library + upload, group assignment + reconciler
-  (auto-push on enroll), command-result history in the UI, session-cleanup job.
+- **Phase 2 polish (optional)** — DB-backed audit log (mutations currently get
+  structured slog entries with user attribution), live SSE command results,
+  "install/remove profile now" one-off actions from the device page.
 - **Phase 3+** — OIDC/LDAP/Kerberos providers, DZsec migration (`import --from-mysql`),
   DDM, ABM/ADE, packaging polish.
