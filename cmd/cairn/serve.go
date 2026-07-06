@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/dzsec/cairn/internal/assign"
 	"github.com/dzsec/cairn/internal/auth"
 	"github.com/dzsec/cairn/internal/config"
 	"github.com/dzsec/cairn/internal/mdmcore"
@@ -81,7 +82,12 @@ func runServe(ctx context.Context, args []string) error {
 			}
 		}
 	}()
-	console, err := web.New(sessions, auth.NewLocalStore(db.SQL()), db, db, db, commander,
+	// Assignment reconciler: pushes assigned profiles when devices enroll and
+	// when admins change groups/assignments. Event-driven — no polling loop.
+	reconciler := assign.New(db, commander, log)
+	core.OnPushable(reconciler.DeviceNowPushable)
+
+	console, err := web.New(sessions, auth.NewLocalStore(db.SQL()), db, commander, reconciler,
 		web.Config{PublicURL: cfg.Server.PublicURL}, log)
 	if err != nil {
 		return err

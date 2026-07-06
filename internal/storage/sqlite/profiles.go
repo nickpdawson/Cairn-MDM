@@ -32,9 +32,11 @@ func (p Profile) Types() []string {
 // semantics: same identifier = in-place replacement) and returns its row ID.
 func (db *DB) SaveProfile(ctx context.Context, p Profile) (int64, error) {
 	var id int64
+	// updated_at uses millisecond resolution: the deploy reconciler re-arms on
+	// any updated_at change, and second-resolution would miss a rapid re-upload.
 	err := db.sql.QueryRowContext(ctx,
-		`INSERT INTO profiles (identifier, uuid, name, organization, payload_types, source, data)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO profiles (identifier, uuid, name, organization, payload_types, source, data, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f','now'))
 		 ON CONFLICT (identifier) DO UPDATE SET
 		   uuid          = excluded.uuid,
 		   name          = excluded.name,
@@ -42,7 +44,7 @@ func (db *DB) SaveProfile(ctx context.Context, p Profile) (int64, error) {
 		   payload_types = excluded.payload_types,
 		   source        = excluded.source,
 		   data          = excluded.data,
-		   updated_at    = datetime('now')
+		   updated_at    = strftime('%Y-%m-%d %H:%M:%f','now')
 		 RETURNING id`,
 		p.Identifier, p.UUID, p.Name, p.Organization, p.PayloadTypes, p.Source, p.Data).Scan(&id)
 	return id, err

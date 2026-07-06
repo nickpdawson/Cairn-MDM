@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>{{template "head" .}}</head>
+<body>
+  {{template "topbar" .}}
+  <main>
+    <p><a href="/admin/groups">← Groups</a></p>
+    <h1>{{.Group.Name}}</h1>
+    {{if .Group.Description}}<p class="sub">{{.Group.Description}}</p>{{end}}
+
+    {{if .Flash}}<div class="card callout" style="margin-top:0">{{.Flash}}</div>{{end}}
+    {{if .Error}}<div class="card callout error" style="margin-top:0">{{.Error}}</div>{{end}}
+
+    {{$csrf := .CSRF}}
+    {{$gid := .Group.ID}}
+    {{$admin := .User.Role.AtLeast "admin"}}
+
+    <h2>Assigned profiles</h2>
+    <div class="card">
+      {{if .Assigned}}
+      <table>
+        <tbody>
+          {{range .Assigned}}
+          <tr>
+            <td>
+              <a href="/admin/profiles/{{.ID}}">{{.Name}}</a>
+              <div class="sub mono">{{.Identifier}}</div>
+            </td>
+            <td>{{range .Types}}<span class="tag">{{.}}</span> {{end}}</td>
+            {{if $admin}}
+            <td style="text-align:right">
+              <form method="post" action="/admin/groups/{{$gid}}/profiles">
+                <input type="hidden" name="csrf" value="{{$csrf}}">
+                <input type="hidden" name="action" value="unassign">
+                <input type="hidden" name="profile_id" value="{{.ID}}">
+                <button class="btn link" type="submit">Unassign</button>
+              </form>
+            </td>
+            {{end}}
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <div class="empty">No profiles assigned.</div>
+      {{end}}
+    </div>
+    {{if and $admin .AddableProfiles}}
+    <form method="post" action="/admin/groups/{{$gid}}/profiles" style="margin-top:12px">
+      <input type="hidden" name="csrf" value="{{$csrf}}">
+      <input type="hidden" name="action" value="assign">
+      <select name="profile_id" required>
+        <option value="" disabled selected>Assign a profile…</option>
+        {{range .AddableProfiles}}<option value="{{.ID}}">{{.Name}} ({{.Identifier}})</option>{{end}}
+      </select>
+      <button class="btn" type="submit">Assign &amp; push</button>
+    </form>
+    {{end}}
+
+    <h2>Devices</h2>
+    <div class="card">
+      {{if .Members}}
+      <table>
+        <tbody>
+          {{range .Members}}
+          <tr>
+            <td>
+              <span class="dot {{if .Enrolled}}on{{else}}off{{end}}"></span>
+              <a href="/admin/devices/{{.ID}}">{{.DisplayName}}</a>
+              <div class="sub mono">{{.Serial}}</div>
+            </td>
+            <td class="sub">{{.Product}} {{.OSVersion}}</td>
+            {{if $admin}}
+            <td style="text-align:right">
+              <form method="post" action="/admin/groups/{{$gid}}/devices">
+                <input type="hidden" name="csrf" value="{{$csrf}}">
+                <input type="hidden" name="action" value="remove">
+                <input type="hidden" name="device_id" value="{{.ID}}">
+                <button class="btn link" type="submit">Remove</button>
+              </form>
+            </td>
+            {{end}}
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <div class="empty">No devices in this group.</div>
+      {{end}}
+    </div>
+    {{if and $admin .AddableDevices}}
+    <form method="post" action="/admin/groups/{{$gid}}/devices" style="margin-top:12px">
+      <input type="hidden" name="csrf" value="{{$csrf}}">
+      <input type="hidden" name="action" value="add">
+      <select name="device_id" required>
+        <option value="" disabled selected>Add a device…</option>
+        {{range .AddableDevices}}<option value="{{.ID}}">{{.DisplayName}} ({{.Serial}})</option>{{end}}
+      </select>
+      <button class="btn" type="submit">Add &amp; push</button>
+    </form>
+    {{end}}
+
+    {{if $admin}}
+    <h2>Danger zone</h2>
+    <form method="post" action="/admin/groups/{{$gid}}/delete"
+          onsubmit="return confirm('Delete this group? Installed profiles stay on devices.')">
+      <input type="hidden" name="csrf" value="{{$csrf}}">
+      <button class="btn danger" type="submit">Delete group</button>
+    </form>
+    {{end}}
+  </main>
+</body>
+</html>

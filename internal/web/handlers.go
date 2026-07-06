@@ -126,10 +126,15 @@ func (a *App) handleDeviceDetail(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		a.log.Error("list commands", "id", d.ID, "err", err)
 	}
+	groups, err := a.groups.DeviceGroups(r.Context(), d.ID)
+	if err != nil {
+		a.log.Error("device groups", "id", d.ID, "err", err)
+	}
 	a.render(w, r, http.StatusOK, "device.html", map[string]any{
 		"Title":    d.DisplayName(),
 		"Device":   d,
 		"Commands": commands,
+		"Groups":   groups,
 		"Flash":    r.URL.Query().Get("flash"),
 	})
 }

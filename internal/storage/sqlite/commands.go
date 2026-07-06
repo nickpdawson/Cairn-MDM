@@ -36,12 +36,28 @@ func (db *DB) CommandSent(ctx context.Context, deviceID, commandUUID, requestTyp
 
 // CommandResult resolves a history row when the device reports at check-in.
 // Results for commands not sent through Cairn (unknown UUIDs) are ignored.
+// InstallProfile results also resolve the matching profile_deploys row, which
+// is how the reconciler learns a deploy landed (or failed) without polling.
 func (db *DB) CommandResult(ctx context.Context, deviceID, commandUUID, status, errDesc string) error {
-	_, err := db.sql.ExecContext(ctx,
+	if _, err := db.sql.ExecContext(ctx,
 		`UPDATE command_history
 		 SET status = ?, error = ?, result_at = datetime('now')
 		 WHERE command_uuid = ?`,
-		status, errDesc, commandUUID)
+		status, errDesc, commandUUID); err != nil {
+		return err
+	}
+	var deployStatus string
+	switch status {
+	case "Acknowledged":
+		deployStatus = "installed"
+	case "Error", "CommandFormatError":
+		deployStatus = "failed"
+	default: // NotNow etc. — still in flight
+		return nil
+	}
+	_, err := db.sql.ExecContext(ctx,
+		`UPDATE profile_deploys SET status = ?, updated_at = datetime('now')
+		 WHERE command_uuid = ?`, deployStatus, commandUUID)
 	return err
 }
 

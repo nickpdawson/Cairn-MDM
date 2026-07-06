@@ -23,6 +23,9 @@
           <tr><th>Enrolled</th><td class="sub">{{nullStr .Device.EnrolledAt}}</td></tr>
           <tr><th>Last seen</th><td class="sub">{{nullStr .Device.LastSeen}}</td></tr>
           <tr><th>Token updated</th><td class="sub">{{nullStr .Device.TokenUpdatedAt}}</td></tr>
+          <tr><th>Groups</th><td>
+            {{if .Groups}}{{range .Groups}}<a class="tag" href="/admin/groups/{{.ID}}">{{.Name}}</a> {{end}}{{else}}—{{end}}
+          </td></tr>
         </tbody>
       </table>
     </div>

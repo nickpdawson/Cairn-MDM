@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>{{template "head" .}}</head>
+<body>
+  {{template "topbar" .}}
+  <main>
+    <h1>Groups</h1>
+
+    {{if .Flash}}<div class="card callout">{{.Flash}}</div>{{end}}
+    {{if .Error}}<div class="card callout error">{{.Error}}</div>{{end}}
+
+    <div class="card">
+      {{if .Groups}}
+      <table>
+        <thead>
+          <tr><th>Group</th><th>Devices</th><th>Profiles</th><th>Created</th></tr>
+        </thead>
+        <tbody>
+          {{range .Groups}}
+          <tr>
+            <td>
+              <a href="/admin/groups/{{.ID}}">{{.Name}}</a>
+              {{if .Description}}<div class="sub">{{.Description}}</div>{{end}}
+            </td>
+            <td>{{.DeviceCount}}</td>
+            <td>{{.ProfileCount}}</td>
+            <td class="sub">{{.CreatedAt}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <div class="empty">No groups yet. Create one below, assign profiles to it, and add devices — assigned profiles push automatically when a device enrolls.</div>
+      {{end}}
+    </div>
+
+    {{if .User.Role.AtLeast "admin"}}
+    <h2>New group</h2>
+    <div class="card">
+      <form method="post" action="/admin/groups">
+        <input type="hidden" name="csrf" value="{{.CSRF}}">
+        <p>
+          <input type="text" name="name" placeholder="Group name" required>
+          <input type="text" name="description" placeholder="Description (optional)" size="40">
+          <button class="btn" type="submit">Create</button>
+        </p>
+      </form>
+    </div>
+    {{end}}
+  </main>
+</body>
+</html>

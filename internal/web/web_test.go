@@ -27,7 +27,7 @@ func testApp(t *testing.T) (*App, *auth.SessionStore, *sqlite.DB) {
 		t.Fatal(err)
 	}
 	sessions := auth.NewSessionStore(db.SQL(), time.Hour)
-	app, err := New(sessions, local, db, db, db, stubCommander{}, Config{PublicURL: "https://mdm.example.org"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	app, err := New(sessions, local, db, stubCommander{}, nil, Config{PublicURL: "https://mdm.example.org"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
