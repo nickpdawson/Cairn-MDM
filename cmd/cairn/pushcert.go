@@ -13,13 +13,17 @@ import (
 
 func runPushcert(ctx context.Context, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: cairn pushcert import -cert <file> -key <file> [-config <file>]")
+		return fmt.Errorf("usage: cairn pushcert <request|decrypt|import> [flags]")
 	}
 	switch args[0] {
+	case "request":
+		return runPushcertRequest(ctx, args[1:])
+	case "decrypt":
+		return runPushcertDecrypt(ctx, args[1:])
 	case "import":
 		return runPushcertImport(ctx, args[1:])
 	default:
-		return fmt.Errorf("unknown pushcert subcommand %q (want: import)", args[0])
+		return fmt.Errorf("unknown pushcert subcommand %q (want: request, decrypt, import)", args[0])
 	}
 }
 
