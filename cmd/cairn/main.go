@@ -52,6 +52,8 @@ func main() {
 		err = runEnqueue(ctx, args)
 	case "ca":
 		err = runCA(ctx, args)
+	case "admin":
+		err = runAdmin(ctx, args)
 	case "version", "-v", "--version":
 		fmt.Println(version.Info())
 	case "help", "-h", "--help":
@@ -81,6 +83,7 @@ Commands:
   pushcert   manage the APNs push certificate (import)
   enqueue    queue a command for a device and push
   ca         manage the certificate authority (export)
+  admin      manage console accounts (add, passwd, list, del)
   version    print build information
   help       show this help
 

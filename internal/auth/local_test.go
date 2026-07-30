@@ -76,3 +76,42 @@ func TestRoleAtLeast(t *testing.T) {
 		t.Error("operator should satisfy operator")
 	}
 }
+
+func TestListAndDeleteUsers(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+
+	if err := s.CreateUser(ctx, "admin1", "hunter2hunter2", RoleAdmin, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateUser(ctx, "op1", "hunter2hunter2", RoleOperator, "Op One"); err != nil {
+		t.Fatal(err)
+	}
+
+	users, err := s.ListUsers(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(users) != 2 {
+		t.Fatalf("got %d users, want 2", len(users))
+	}
+
+	// Deleting the last admin is refused.
+	if err := s.DeleteUser(ctx, "admin1"); err == nil {
+		t.Fatal("deleting the last admin should be refused")
+	}
+
+	// A second admin makes the first deletable.
+	if err := s.CreateUser(ctx, "admin2", "hunter2hunter2", RoleAdmin, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteUser(ctx, "admin1"); err != nil {
+		t.Fatalf("delete admin1 with admin2 present: %v", err)
+	}
+	if _, err := s.Authenticate(ctx, "admin1", "hunter2hunter2"); err == nil {
+		t.Error("deleted user can still authenticate")
+	}
+	if err := s.DeleteUser(ctx, "nosuch"); err == nil {
+		t.Error("deleting unknown user should error")
+	}
+}

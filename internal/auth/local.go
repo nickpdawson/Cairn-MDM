@@ -100,3 +100,59 @@ func (s *LocalStore) CountUsers(ctx context.Context) (int, error) {
 	err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM app_users`).Scan(&n)
 	return n, err
 }
+
+// UserSummary is a local account row for admin tooling.
+type UserSummary struct {
+	Username    string
+	Role        Role
+	DisplayName string
+	CreatedAt   string
+}
+
+// ListUsers returns all local accounts.
+func (s *LocalStore) ListUsers(ctx context.Context) ([]UserSummary, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT username, role, display_name, created_at FROM app_users ORDER BY username`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []UserSummary
+	for rows.Next() {
+		var u UserSummary
+		var role string
+		if err := rows.Scan(&u.Username, &role, &u.DisplayName, &u.CreatedAt); err != nil {
+			return nil, err
+		}
+		u.Role = Role(role)
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
+// DeleteUser removes a local account and its sessions. It refuses to remove
+// the last admin — that would lock the console permanently.
+func (s *LocalStore) DeleteUser(ctx context.Context, username string) error {
+	role, err := s.UserRole(ctx, username)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("auth: no such user %q", username)
+	}
+	if err != nil {
+		return err
+	}
+	if role == RoleAdmin {
+		var admins int
+		if err := s.db.QueryRowContext(ctx,
+			`SELECT count(*) FROM app_users WHERE role = ?`, string(RoleAdmin)).Scan(&admins); err != nil {
+			return err
+		}
+		if admins <= 1 {
+			return errors.New("auth: refusing to delete the last admin account")
+		}
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM app_users WHERE username = ?`, username); err != nil {
+		return fmt.Errorf("auth: delete user: %w", err)
+	}
+	_, err = s.db.ExecContext(ctx, `DELETE FROM app_sessions WHERE username = ?`, username)
+	return err
+}
