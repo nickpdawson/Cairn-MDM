@@ -35,9 +35,19 @@ type pkiResult struct {
 	Anchors   [][]byte // trust-anchor certs (DER)
 }
 
-func wirePKI(ctx context.Context, cfg config.Config, db *sql.DB, topics enroll.TopicProvider, log *slog.Logger, deps *server.Deps) (*pkiResult, error) {
+func wirePKI(ctx context.Context, cfg config.Config, db *sql.DB, topics enroll.TopicProvider, redeemer enroll.Redeemer, log *slog.Logger, deps *server.Deps) (*pkiResult, error) {
 	host := publicHost(cfg.Server.PublicURL)
 	org := "cairn." + host
+
+	// mountEnroll builds the enroll handler and mounts both the grant route
+	// (GET /e/{token}) and the bare /enroll route (default-denied unless
+	// enrollment.allow_open).
+	mountEnroll := func(c enroll.Config) {
+		c.AllowOpen = cfg.Enrollment.AllowOpen
+		h := enroll.New(c, topics, redeemer, push.SettingTopic, log)
+		deps.Enroll = h
+		deps.EnrollGrant = http.HandlerFunc(h.ServeGrant)
+	}
 
 	if cfg.CA.Mode.Embedded() {
 		opts := ca.Options{
@@ -67,19 +77,19 @@ func wirePKI(ctx context.Context, cfg config.Config, db *sql.DB, topics enroll.T
 			return nil, err
 		}
 		deps.SCEP = scepHandler
-		deps.Enroll = enroll.New(enroll.Config{
+		mountEnroll(enroll.Config{
 			Organization:  org,
 			CAAnchorsDER:  [][]byte{authority.Certificate().Raw},
 			SCEPURL:       cfg.Server.PublicURL + "/scep",
 			Challenge:     cfg.CA.External.Challenge,
 			MDMServerURL:  cfg.Server.PublicURL + cfg.Server.MDMPath,
 			SubjectPrefix: "devices." + host,
-		}, topics, push.SettingTopic, log)
+		})
 
 		deps.CA = caDownloadHandler([][]byte{authority.Certificate().Raw})
 		log.Info("embedded CA ready", "mode", cfg.CA.Mode, "scep_path", "/scep",
 			"ca_cn", authority.Certificate().Subject.CommonName)
-		log.Info("enrollment endpoint ready", "path", "/enroll")
+		log.Info("enrollment endpoint ready", "grant_path", "/e/{token}", "open", cfg.Enrollment.AllowOpen)
 		return &pkiResult{
 			Authority: authority,
 			Org:       org,
@@ -98,18 +108,18 @@ func wirePKI(ctx context.Context, cfg config.Config, db *sql.DB, topics enroll.T
 	if err != nil {
 		return nil, err
 	}
-	deps.Enroll = enroll.New(enroll.Config{
+	mountEnroll(enroll.Config{
 		Organization:  org,
 		CAAnchorsDER:  anchors,
 		SCEPURL:       cfg.CA.External.SCEPURL,
 		Challenge:     cfg.CA.External.Challenge,
 		MDMServerURL:  cfg.Server.PublicURL + cfg.Server.MDMPath,
 		SubjectPrefix: "devices." + host,
-	}, topics, push.SettingTopic, log)
+	})
 
 	deps.CA = caDownloadHandler(anchors)
 	log.Info("external SCEP configured", "scep_url", cfg.CA.External.SCEPURL, "trust_anchors", len(anchors))
-	log.Info("enrollment endpoint ready", "path", "/enroll")
+	log.Info("enrollment endpoint ready", "grant_path", "/e/{token}", "open", cfg.Enrollment.AllowOpen)
 	return &pkiResult{
 		Org:       org,
 		SCEPURL:   cfg.CA.External.SCEPURL,

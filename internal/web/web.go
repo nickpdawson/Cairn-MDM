@@ -65,6 +65,14 @@ type GroupStore interface {
 	DeviceGroups(ctx context.Context, deviceID string) ([]sqlite.Group, error)
 }
 
+// GrantStore manages single-use enrollment grants.
+type GrantStore interface {
+	CreateGrant(ctx context.Context, g sqlite.Grant, tokenHash string) (int64, error)
+	ListGrants(ctx context.Context) ([]sqlite.Grant, error)
+	GetGrant(ctx context.Context, id int64) (sqlite.Grant, error)
+	RevokeGrant(ctx context.Context, id int64) error
+}
+
 // Store bundles everything the console reads and writes; *sqlite.DB implements
 // all of it.
 type Store interface {
@@ -72,6 +80,7 @@ type Store interface {
 	SettingsSource
 	ProfileStore
 	GroupStore
+	GrantStore
 }
 
 // Commander runs device actions from the console.
@@ -106,6 +115,7 @@ type App struct {
 	settings SettingsSource
 	profiles ProfileStore
 	groups   GroupStore
+	grants   GrantStore
 	cmd      Commander
 	rec      Reconciler // may be nil (no auto-push)
 	cfg      Config
@@ -121,7 +131,7 @@ func New(sessions *auth.SessionStore, authn Authenticator, store Store, cmd Comm
 	}
 	return &App{
 		sessions: sessions, auth: authn,
-		devices: store, settings: store, profiles: store, groups: store,
+		devices: store, settings: store, profiles: store, groups: store, grants: store,
 		cmd: cmd, rec: rec, cfg: cfg, tmpl: tmpl, log: log,
 	}, nil
 }
@@ -159,6 +169,11 @@ func (a *App) Register(mux *http.ServeMux) {
 
 	// Groups + assignments. Membership/assignment changes trigger the
 	// reconciler, which pushes profiles — admin-only, like the library.
+	// Enrollment grants — operators create/revoke single-use enroll links.
+	mux.Handle("GET /admin/enrollment", a.requireRole(auth.RoleOperator, a.handleEnrollment))
+	mux.Handle("POST /admin/enrollment", a.requireRole(auth.RoleOperator, a.handleGrantCreate))
+	mux.Handle("POST /admin/enrollment/{id}/revoke", a.requireRole(auth.RoleOperator, a.handleGrantRevoke))
+
 	mux.Handle("GET /admin/groups", a.requireRole(auth.RoleOperator, a.handleGroups))
 	mux.Handle("POST /admin/groups", a.requireRole(auth.RoleAdmin, a.handleGroupCreate))
 	mux.Handle("GET /admin/groups/{id}", a.requireRole(auth.RoleOperator, a.handleGroupDetail))

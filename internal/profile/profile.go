@@ -29,9 +29,14 @@ type EnrollmentParams struct {
 
 	SCEPURL   string // SCEP endpoint, e.g. https://mdm.example.com/scep
 	SCEPName  string // SCEP CA identifier (may be empty)
-	SubjectCN string // CommonName the device requests, e.g. host.devices.example.com
+	SubjectCN string // CommonName the device requests; may contain Apple vars like %SerialNumber%
 	Challenge string // SCEP challenge password (empty if none)
 	KeySize   int    // device key size (default 2048)
+
+	// OwnerRFC822, when set, is added as a SubjectAltName rfc822Name on the
+	// device identity request — the owner binding FreeRADIUS reads for the
+	// live AD-disabled check (EAP-TLS). Empty = no SAN.
+	OwnerRFC822 string
 
 	MDMServerURL  string // com.apple.mdm ServerURL, e.g. https://mdm.example.com/mdm
 	MDMCheckInURL string // com.apple.mdm CheckInURL (usually == ServerURL)
@@ -75,18 +80,7 @@ func BuildEnrollment(p EnrollmentParams) (map[string]any, error) {
 		"PayloadIdentifier":  id("scep"),
 		"PayloadUUID":        scepUUID,
 		"PayloadDisplayName": "Device Identity (SCEP)",
-		"PayloadContent": map[string]any{
-			"URL":  p.SCEPURL,
-			"Name": p.SCEPName,
-			// Subject is an array of RDNs, each an array of [type, value] pairs.
-			"Subject":    []any{[]any{[]any{"CN", p.SubjectCN}}},
-			"Key Type":   "RSA",
-			"Key Usage":  5, // digitalSignature(1) | keyEncipherment(4)
-			"Keysize":    p.KeySize,
-			"Challenge":  p.Challenge,
-			"Retries":    3,
-			"RetryDelay": 10,
-		},
+		"PayloadContent":     scepContent(p),
 	}
 
 	mdm := Payload{
@@ -120,6 +114,27 @@ func BuildEnrollment(p EnrollmentParams) (map[string]any, error) {
 		"PayloadOrganization": p.Organization,
 		"PayloadContent":      payloads,
 	}, nil
+}
+
+// scepContent builds the com.apple.security.scep PayloadContent, adding a
+// SubjectAltName rfc822Name when an owner is bound to the enrollment.
+func scepContent(p EnrollmentParams) map[string]any {
+	c := map[string]any{
+		"URL":  p.SCEPURL,
+		"Name": p.SCEPName,
+		// Subject is an array of RDNs, each an array of [type, value] pairs.
+		"Subject":    []any{[]any{[]any{"CN", p.SubjectCN}}},
+		"Key Type":   "RSA",
+		"Key Usage":  5, // digitalSignature(1) | keyEncipherment(4)
+		"Keysize":    p.KeySize,
+		"Challenge":  p.Challenge,
+		"Retries":    3,
+		"RetryDelay": 10,
+	}
+	if p.OwnerRFC822 != "" {
+		c["SubjectAltName"] = map[string]any{"rfc822Name": p.OwnerRFC822}
+	}
+	return c
 }
 
 // Marshal renders a profile plist to XML bytes.

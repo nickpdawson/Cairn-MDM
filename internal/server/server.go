@@ -25,11 +25,12 @@ type Readiness interface {
 // Deps are the optional subsystem handlers the server mounts. A nil handler is
 // simply not mounted.
 type Deps struct {
-	MDM    http.Handler // NanoMDM check-in/command handler (mounted at mdm_path)
-	SCEP   http.Handler // embedded-CA SCEP handler (mounted at /scep)
-	Enroll http.Handler // enrollment profile handler (mounted at /enroll)
-	CA     http.Handler // CA trust-anchor download (mounted at GET /ca)
-	UI     UIRegistrar  // admin console; registers its own routes
+	MDM         http.Handler // NanoMDM check-in/command handler (mounted at mdm_path)
+	SCEP        http.Handler // embedded-CA SCEP handler (mounted at /scep)
+	Enroll      http.Handler // bare enrollment handler (mounted at GET /enroll; default-denied)
+	EnrollGrant http.Handler // grant-based enrollment (mounted at GET /e/{token})
+	CA          http.Handler // CA trust-anchor download (mounted at GET /ca)
+	UI          UIRegistrar  // admin console; registers its own routes
 }
 
 // UIRegistrar registers admin-console routes on the server mux. Implementing
@@ -99,6 +100,8 @@ func sensitivePath(p string) bool {
 		return true
 	case p == "/enroll" || strings.HasPrefix(p, "/enroll/"):
 		return true
+	case strings.HasPrefix(p, "/e/"):
+		return true
 	default:
 		return false
 	}
@@ -126,6 +129,10 @@ func (s *Server) routes() {
 
 	if s.deps.Enroll != nil {
 		s.mux.Handle("GET /enroll", s.deps.Enroll)
+	}
+
+	if s.deps.EnrollGrant != nil {
+		s.mux.Handle("GET /e/{token}", s.deps.EnrollGrant)
 	}
 
 	if s.deps.CA != nil {

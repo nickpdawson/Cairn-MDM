@@ -12,6 +12,7 @@ require (
 	github.com/micromdm/plist v0.2.1
 	github.com/micromdm/scep/v2 v2.3.0
 	github.com/pelletier/go-toml/v2 v2.2.3
+	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/smallstep/pkcs7 v0.2.1
 	github.com/smallstep/scep v0.0.0-20241223071629-a37a330173bc
 	golang.org/x/crypto v0.54.0

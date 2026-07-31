@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>{{template "head" .}}</head>
+<body>
+  {{template "topbar" .}}
+  <main>
+    <h1>Enrollment</h1>
+
+    {{if .Flash}}<div class="card callout">{{.Flash}}</div>{{end}}
+    {{if .Error}}<div class="card callout error">{{.Error}}</div>{{end}}
+
+    {{with .Created}}
+    <div class="card" style="padding:24px">
+      <h2 style="margin-top:0">Enrollment link created</h2>
+      <p class="sub">Shown once — copy it now. It works {{.MaxUses}} time(s) and expires in {{.ExpiresHours}} hour(s).</p>
+      <p><input type="text" class="mono" style="width:100%" readonly value="{{.Link}}" onclick="this.select()"></p>
+      {{if .QR}}<p><img src="{{.QR}}" alt="Enrollment QR code" width="256" height="256"></p>{{end}}
+      <p class="sub">Open the link in Safari on the target device (or scan the QR) to install the enrollment profile.</p>
+    </div>
+    {{end}}
+
+    <div class="card">
+      {{if .Grants}}
+      <table>
+        <thead>
+          <tr><th>Label / owner</th><th>Platform</th><th>Uses</th><th>Status</th><th>Expires</th><th></th></tr>
+        </thead>
+        <tbody>
+          {{range .Grants}}
+          <tr>
+            <td>
+              {{if .Label}}{{.Label}}{{else}}<span class="sub">(no label)</span>{{end}}
+              {{if .Owner}}<div class="sub mono">{{.Owner}}</div>{{end}}
+            </td>
+            <td>{{.Platform}}</td>
+            <td>{{.UseCount}}/{{.MaxUses}}</td>
+            <td>
+              <span class="dot {{if eq .Status "active"}}on{{else if eq .Status "used"}}wait{{else}}off{{end}}"></span>
+              {{.Status}}
+            </td>
+            <td class="sub">{{.ExpiresAt}}</td>
+            <td style="text-align:right">
+              {{if eq .Status "active"}}
+              <form method="post" action="/admin/enrollment/{{.ID}}/revoke" style="display:inline"
+                    onsubmit="return confirm('Revoke this enrollment link?')">
+                <input type="hidden" name="csrf" value="{{$.CSRF}}">
+                <button class="btn link" type="submit">Revoke</button>
+              </form>
+              {{end}}
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <div class="empty">No enrollment links yet. Create one below and open it on the device.</div>
+      {{end}}
+    </div>
+
+    <h2>New enrollment link</h2>
+    <div class="card">
+      <form method="post" action="/admin/enrollment">
+        <input type="hidden" name="csrf" value="{{.CSRF}}">
+        <p>
+          <input type="text" name="label" placeholder="Label (e.g. Nick's MacBook)" size="30">
+          <input type="text" name="owner" placeholder="Owner email (optional, for Wi-Fi binding)" size="34">
+        </p>
+        <p>
+          <label>Platform
+            <select name="platform">
+              <option value="any" selected>Any</option>
+              <option value="macos">macOS</option>
+              <option value="ios">iOS/iPadOS</option>
+            </select>
+          </label>
+          &nbsp;<label>Uses <input type="number" name="max_uses" value="1" min="1" max="100" style="width:5em"></label>
+          &nbsp;<label>Expires in (hours) <input type="number" name="expires_hours" value="24" min="1" max="8760" style="width:6em"></label>
+        </p>
+        <p><input type="text" name="expected_serial" placeholder="Bind to serial (optional)" size="24" class="mono"></p>
+        <p><button class="btn" type="submit">Create link</button></p>
+      </form>
+    </div>
+  </main>
+</body>
+</html>

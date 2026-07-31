@@ -12,6 +12,7 @@ import (
 	"github.com/dzsec/cairn/internal/assign"
 	"github.com/dzsec/cairn/internal/auth"
 	"github.com/dzsec/cairn/internal/config"
+	"github.com/dzsec/cairn/internal/enroll"
 	"github.com/dzsec/cairn/internal/mdmcore"
 	"github.com/dzsec/cairn/internal/push"
 	"github.com/dzsec/cairn/internal/server"
@@ -56,7 +57,7 @@ func runServe(ctx context.Context, args []string) error {
 	deps := server.Deps{MDM: core.Handler()}
 
 	// Configure SCEP + enrollment per ca.mode (generate | import | external).
-	pki, err := wirePKI(ctx, cfg, db.SQL(), db, log, &deps)
+	pki, err := wirePKI(ctx, cfg, db.SQL(), db, grantRedeemer{db}, log, &deps)
 	if err != nil {
 		return err
 	}
@@ -145,6 +146,18 @@ func runServe(ctx context.Context, args []string) error {
 	}
 	log.Info("stopped")
 	return nil
+}
+
+// grantRedeemer adapts *sqlite.DB to enroll.Redeemer (translating the storage
+// Redemption type to the enroll one).
+type grantRedeemer struct{ db *sqlite.DB }
+
+func (g grantRedeemer) RedeemGrant(ctx context.Context, rawToken string) (enroll.Redemption, error) {
+	r, err := g.db.RedeemGrant(ctx, rawToken)
+	if err != nil {
+		return enroll.Redemption{}, err
+	}
+	return enroll.Redemption{Platform: r.Platform, Owner: r.Owner, ExpectedSerial: r.ExpectedSerial}, nil
 }
 
 // publicHost extracts the host from the configured public URL for use in the CA

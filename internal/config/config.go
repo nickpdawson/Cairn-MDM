@@ -64,11 +64,20 @@ func (m CAMode) Embedded() bool { return m == CAGenerate || m == CAImport }
 // Config is the fully-resolved runtime configuration. Secrets have already been
 // loaded from their _file/_env sources by the time a Config is returned.
 type Config struct {
-	Server  Server  `toml:"server"`
-	Storage Storage `toml:"storage"`
-	CA      CA      `toml:"ca"`
-	Auth    Auth    `toml:"auth"`
-	Log     Log     `toml:"log"`
+	Server     Server     `toml:"server"`
+	Storage    Storage    `toml:"storage"`
+	CA         CA         `toml:"ca"`
+	Auth       Auth       `toml:"auth"`
+	Enrollment Enrollment `toml:"enrollment"`
+	Log        Log        `toml:"log"`
+}
+
+// Enrollment configures device-enrollment access.
+type Enrollment struct {
+	// AllowOpen serves the bare, unauthenticated /enroll route. Default false:
+	// enrollment requires a single-use grant link (/e/{token}). Set true only
+	// for a low-stakes homelab that accepts an open enrollment endpoint.
+	AllowOpen bool `toml:"allow_open"`
 }
 
 // Auth configures the console's authentication providers. Local accounts are
