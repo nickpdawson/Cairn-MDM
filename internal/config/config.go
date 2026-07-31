@@ -67,7 +67,47 @@ type Config struct {
 	Server  Server  `toml:"server"`
 	Storage Storage `toml:"storage"`
 	CA      CA      `toml:"ca"`
+	Auth    Auth    `toml:"auth"`
 	Log     Log     `toml:"log"`
+}
+
+// Auth configures the console's authentication providers. Local accounts are
+// always enabled (they are the break-glass path); external providers are
+// tried first when configured, with local as the fallback.
+type Auth struct {
+	LDAP LDAPCfg `toml:"ldap"`
+}
+
+// LDAPCfg configures directory (Active Directory / LDAP) login.
+//
+// Role assignment is always explicit: group DNs map to roles via group_roles;
+// an authenticated user matching no mapped group gets default_role. There is
+// deliberately no code path where "authenticated" implies "admin".
+type LDAPCfg struct {
+	Enabled bool `toml:"enabled"`
+	// Servers are tried in order (failover), e.g. "ldaps://dc1.example.org:636".
+	// Schemes: ldaps:// (TLS) or ldap:// (plaintext; combine with start_tls).
+	Servers  []string `toml:"servers"`
+	StartTLS bool     `toml:"start_tls"`
+	// BaseDN is the search base, e.g. "DC=example,DC=org".
+	BaseDN string `toml:"base_dn"`
+	// BindDN is the service account used to locate users. Read-only directory
+	// access is sufficient; use a least-privilege account.
+	BindDN           string `toml:"bind_dn"`
+	BindPassword     string `toml:"-"`
+	BindPasswordFile string `toml:"bind_password_file"`
+	BindPasswordEnv  string `toml:"bind_password_env"`
+	// UserFilter locates the login account; %s is the escaped username.
+	// Default matches Active Directory sAMAccountName.
+	UserFilter string `toml:"user_filter"`
+	// GroupRoles maps group DNs (case-insensitive) to "admin", "operator", or
+	// "user". Membership is matched against the user's memberOf values.
+	GroupRoles map[string]string `toml:"group_roles"`
+	// DefaultRole applies when no mapped group matches (default "user").
+	DefaultRole string `toml:"default_role"`
+	// CAFile adds a PEM CA bundle for validating the directory's TLS cert
+	// (internal-CA LDAPS). System roots are always included.
+	CAFile string `toml:"ca_file"`
 }
 
 // Server holds HTTP listener and public-identity settings.
@@ -226,6 +266,15 @@ func resolveSecrets(cfg *Config) error {
 	}
 	cfg.CA.External.Challenge = ch
 
+	// LDAP bind password.
+	if cfg.Auth.LDAP.Enabled {
+		pw, err := readSecret("auth.ldap.bind_password", "", cfg.Auth.LDAP.BindPasswordFile, cfg.Auth.LDAP.BindPasswordEnv)
+		if err != nil {
+			return err
+		}
+		cfg.Auth.LDAP.BindPassword = pw
+	}
+
 	return nil
 }
 
@@ -309,6 +358,33 @@ func (c Config) Validate() error {
 		}
 	default:
 		errs = append(errs, fmt.Errorf("ca.mode must be generate|import|external, got %q", c.CA.Mode))
+	}
+
+	if l := c.Auth.LDAP; l.Enabled {
+		if len(l.Servers) == 0 {
+			errs = append(errs, errors.New("auth.ldap.servers is required when ldap is enabled"))
+		}
+		for _, s := range l.Servers {
+			if u, err := url.Parse(s); err != nil || (u.Scheme != "ldap" && u.Scheme != "ldaps") || u.Host == "" {
+				errs = append(errs, fmt.Errorf("auth.ldap.servers entry %q must be ldap://host:port or ldaps://host:port", s))
+			}
+		}
+		if l.BaseDN == "" {
+			errs = append(errs, errors.New("auth.ldap.base_dn is required when ldap is enabled"))
+		}
+		if l.BindDN == "" || l.BindPassword == "" {
+			errs = append(errs, errors.New("auth.ldap.bind_dn and bind_password_file/env are required when ldap is enabled"))
+		}
+		for dn, role := range l.GroupRoles {
+			switch role {
+			case "admin", "operator", "user":
+			default:
+				errs = append(errs, fmt.Errorf("auth.ldap.group_roles[%q] must be admin|operator|user, got %q", dn, role))
+			}
+		}
+		if l.DefaultRole != "" && l.DefaultRole != "admin" && l.DefaultRole != "operator" && l.DefaultRole != "user" {
+			errs = append(errs, fmt.Errorf("auth.ldap.default_role must be admin|operator|user, got %q", l.DefaultRole))
+		}
 	}
 
 	return errors.Join(errs...)

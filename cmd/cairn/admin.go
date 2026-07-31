@@ -4,11 +4,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/dzsec/cairn/internal/auth"
 	"github.com/dzsec/cairn/internal/config"
 	"github.com/dzsec/cairn/internal/storage/sqlite"
+	"github.com/dzsec/cairn/internal/version"
 )
 
 // runAdmin manages local console accounts: add, passwd, list, del.
@@ -25,9 +27,55 @@ func runAdmin(ctx context.Context, args []string) error {
 		return runAdminList(ctx, args[1:])
 	case "del":
 		return runAdminDel(ctx, args[1:])
+	case "testauth":
+		return runAdminTestAuth(ctx, args[1:])
 	default:
-		return fmt.Errorf("unknown admin subcommand %q (want: add, passwd, list, del)", args[0])
+		return fmt.Errorf("unknown admin subcommand %q (want: add, passwd, list, del, testauth)", args[0])
 	}
+}
+
+// runAdminTestAuth exercises the full login chain (LDAP + local) from the CLI
+// so directory config can be verified without a browser.
+func runAdminTestAuth(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("admin testauth", flag.ExitOnError)
+	configPath := fs.String("config", defaultConfigPath, "path to cairn.toml")
+	username := fs.String("username", "", "login to test (required)")
+	password := fs.String("password", "", "password (or set CAIRN_TEST_PASSWORD)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *username == "" {
+		return fmt.Errorf("-username is required")
+	}
+	pw := *password
+	if pw == "" {
+		pw = os.Getenv("CAIRN_TEST_PASSWORD")
+	}
+	if pw == "" {
+		return fmt.Errorf("provide -password or CAIRN_TEST_PASSWORD")
+	}
+
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		return err
+	}
+	db, err := sqlite.Open(ctx, cfg.Storage.Path)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	authn, err := buildAuthenticator(cfg, db, version.NewLogger(cfg.Log.Format, cfg.Log.Level))
+	if err != nil {
+		return err
+	}
+
+	id, err := authn.Authenticate(ctx, *username, pw)
+	if err != nil {
+		return fmt.Errorf("authentication FAILED: %w", err)
+	}
+	fmt.Printf("authentication OK\n  username: %s\n  display:  %s\n  role:     %s\n  provider: %s\n",
+		id.Username, id.DisplayName, id.Role, id.Provider)
+	return nil
 }
 
 // openLocalStore loads config and opens the local-account store.

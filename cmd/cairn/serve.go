@@ -88,7 +88,12 @@ func runServe(ctx context.Context, args []string) error {
 	reconciler := assign.New(db, commander, log)
 	core.OnPushable(reconciler.DeviceNowPushable)
 
-	console, err := web.New(sessions, auth.NewLocalStore(db.SQL()), db, commander, reconciler,
+	authn, err := buildAuthenticator(cfg, db, log)
+	if err != nil {
+		return err
+	}
+
+	console, err := web.New(sessions, authn, db, commander, reconciler,
 		web.Config{
 			PublicURL:     cfg.Server.PublicURL,
 			Organization:  pki.Org,
