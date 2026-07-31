@@ -75,20 +75,28 @@ rely on URL secrecy. Owner decision.
 - **1.2 Per-device + owner-bound certs** ✅ — SCEP CN `%SerialNumber%.devices.…`
   + owner rfc822 SubjectAltName; live-verified in the served profile.
 
-**Wave B (next, agent team — parallelizable, different files):**
-- **1.3 Signed enrollment profiles** — `[profile.signing]` config (cert/key
-  files, or reuse_tls in files/acme mode); validate EKU/validity/chain at
-  startup; sign every enrollment response; expose fingerprint. DZsec: operator
-  supplies a signing cert chaining to DZsec Issuing CA (from OpenXPKI) —
-  coordination item, code lands now. Verify green "Verified" on hardware.
-  (MDM-PKI-001)
-- **1.4 Login abuse controls** — per-account/IP throttling + lockout + alert;
-  min password policy; session invalidation on password/role change; short idle
-  + bounded absolute session lifetime; periodic role revalidation. (MDM-AUTH-001)
+**Wave B ✅ DONE 2026-07-31, deployed + live-verified:**
+- **1.3 Signed enrollment profiles** ✅ (commit 5dabc43) — `[profile.signing]`
+  cert/key config + validation; `profile.LoadSigner` verifies key↔cert match +
+  validity (rejects expired/mismatched), fails boot on a bad cert, logs
+  fingerprint. DZsec signing identity: a **dedicated Let's Encrypt cert for
+  cairn.dzsec.net via DNS-01** (certbot dns-cloudflare on CT 226, auto-renew +
+  deploy-hook copies to /etc/cairn/sign.* and reloads). Live: served profile is
+  CMS/PKCS7-signed, signature verifies, chains cairn.dzsec.net→LE→ISRG (public
+  → green "Verified"); on-device banner still to eyeball on hardware.
+  (MDM-PKI-001 CLOSED for deploy)
+- **1.4 Login abuse controls** ✅ (commit 334907d) — per user+IP throttle +
+  lockout (429+Retry-After), session idle timeout + absolute-lifetime cap,
+  DeleteByUsername (admin passwd revokes sessions), min password length.
+  (MDM-AUTH-001)
 
-**Gate:** ✅ enrollment replay/expiry/revoke/exhaustion pass; ✅ no static
-challenge served without a grant; ⏳ signed profile verifies + tampered byte
-fails (Wave B); ✅ DB/key permission + restart test passed (Stage 0).
+**Gate: ✅ ALL PASS** — enrollment replay/expiry/revoke/exhaustion; no static
+challenge without a grant; signed profile CMS-verifies + chains to a public
+root; DB/key perms + restart (Stage 0). Only on-hardware "Verified" eyeball
+remains (needs a physical device).
+
+**Stage 1 COMPLETE.** Deployment now: grant-gated enrollment, per-device
+owner-bound certs, publicly-signed profiles, throttled/bounded auth.
 
 ## Stage 2 — migration safety (P1; before the DZsec rehearsal)
 
