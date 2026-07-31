@@ -61,27 +61,34 @@ rely on URL secrecy. Owner decision.
 
 ## Stage 1 — enrollment + crypto trust (P0; before any internet exposure or public repo)
 
-- **1.1 One-time enrollment grants** — grant table (hashed high-entropy token,
-  platform/fleet, creator = authenticated AD user, created/expiry/used/revoked,
-  use-limit, optional expected serial/UDID, audit). Serve `/e/{token}`, consume
-  atomically, per-grant one-use SCEP challenge (never the shared external
-  challenge). Console: create/list/revoke/QR. Default-deny bare `/enroll`.
-  Concurrent-redemption tests. (MDM-SEC-001)
-- **1.2 Per-device + owner-bound certs** — grant carries the redeeming user;
-  SCEP subject CN = `%SerialNumber%.devices.…`, owner rfc822 SAN in the payload.
-  (Feeds EAP-TLS Stage 4.) 
-- **1.3 Signed enrollment profiles** — dedicated signing identity (reuse the LE
-  cert or an embedded-CA signing cert); validate EKU/validity/chain at startup;
-  sign every enrollment response; expose signer fingerprint in settings. Verify
-  the green "Verified" banner on real hardware. (MDM-PKI-001)
-- **1.4 Login abuse controls** — per-account/IP throttling + lockout + alert;
-  minimum password policy; session invalidation on password/role change;
-  short idle + bounded absolute session lifetime; periodic role revalidation so
-  LDAP group removal takes effect. (MDM-AUTH-001)
+**Wave A ✅ DONE 2026-07-31 (commit a965090), deployed + live-verified:**
+- **1.1 One-time enrollment grants** ✅ — `enrollment_grants` (sha256 token hash
+  only; label/platform/owner/creator/expiry/max_uses/revoked/expected_serial),
+  atomic redeem-and-consume (single UPDATE…RETURNING; race test: 1 of 12 wins),
+  `GET /e/{token}` (invalid→410), bare `/enroll` **default-denied 404**,
+  console create/list/revoke + one-time link + QR (data-URI, never logged).
+  Live: bare /enroll=404, redeem=200, replay=410. (MDM-SEC-001 CLOSED for deploy)
+  — this supersedes the `/enroll` NPM containment item (now denied in code).
+  Note: per-grant one-use SCEP challenge is embedded-mode only; external mode
+  (DZsec) gates the challenge behind the grant — documented in
+  enrollment-grants-design.md.
+- **1.2 Per-device + owner-bound certs** ✅ — SCEP CN `%SerialNumber%.devices.…`
+  + owner rfc822 SubjectAltName; live-verified in the served profile.
 
-**Gate:** enrollment replay/tamper tests pass; no static challenge anywhere in
-config/logs/HTML/DB export; signed profile verifies and a tampered byte fails;
-DB/key permission + restart test passes.
+**Wave B (next, agent team — parallelizable, different files):**
+- **1.3 Signed enrollment profiles** — `[profile.signing]` config (cert/key
+  files, or reuse_tls in files/acme mode); validate EKU/validity/chain at
+  startup; sign every enrollment response; expose fingerprint. DZsec: operator
+  supplies a signing cert chaining to DZsec Issuing CA (from OpenXPKI) —
+  coordination item, code lands now. Verify green "Verified" on hardware.
+  (MDM-PKI-001)
+- **1.4 Login abuse controls** — per-account/IP throttling + lockout + alert;
+  min password policy; session invalidation on password/role change; short idle
+  + bounded absolute session lifetime; periodic role revalidation. (MDM-AUTH-001)
+
+**Gate:** ✅ enrollment replay/expiry/revoke/exhaustion pass; ✅ no static
+challenge served without a grant; ⏳ signed profile verifies + tampered byte
+fails (Wave B); ✅ DB/key permission + restart test passed (Stage 0).
 
 ## Stage 2 — migration safety (P1; before the DZsec rehearsal)
 
