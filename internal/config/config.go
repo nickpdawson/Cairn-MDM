@@ -365,8 +365,16 @@ func (c Config) Validate() error {
 			errs = append(errs, errors.New("auth.ldap.servers is required when ldap is enabled"))
 		}
 		for _, s := range l.Servers {
-			if u, err := url.Parse(s); err != nil || (u.Scheme != "ldap" && u.Scheme != "ldaps") || u.Host == "" {
+			u, err := url.Parse(s)
+			if err != nil || (u.Scheme != "ldap" && u.Scheme != "ldaps") || u.Host == "" {
 				errs = append(errs, fmt.Errorf("auth.ldap.servers entry %q must be ldap://host:port or ldaps://host:port", s))
+				continue
+			}
+			// Reject plaintext transport: a bare ldap:// URL sends the bind
+			// password (service account and user) in cleartext unless StartTLS
+			// upgrades the connection. Require ldaps:// or start_tls=true.
+			if u.Scheme == "ldap" && !l.StartTLS {
+				errs = append(errs, fmt.Errorf("auth.ldap.servers entry %q uses plaintext ldap:// without start_tls; use ldaps:// or set start_tls=true", s))
 			}
 		}
 		if l.BaseDN == "" {

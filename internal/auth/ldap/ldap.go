@@ -80,15 +80,22 @@ func New(cfg config.LDAPCfg, log *slog.Logger) (*Provider, error) {
 		}
 		var opts []goldap.DialOpt
 		if u.Scheme == "ldaps" && tlsCfg != nil {
+			// Pin ServerName to the URL host so the directory cert is verified
+			// against the hostname (an explicit RootCAs pool otherwise leaves
+			// ServerName empty, which disables hostname verification).
 			c := tlsCfg.Clone()
 			c.ServerName = u.Hostname()
 			opts = append(opts, goldap.DialWithTLSConfig(c))
 		}
+		// For ldaps:// without an extra CA bundle, goldap.DialURL derives
+		// ServerName from the URL host and verifies against system roots.
 		conn, err := goldap.DialURL(serverURL, opts...)
 		if err != nil {
 			return nil, err
 		}
 		if u.Scheme == "ldap" && cfg.StartTLS {
+			// StartTLS must also verify the cert against the hostname: set
+			// ServerName from the URL host (InsecureSkipVerify stays false).
 			c := &tls.Config{ServerName: u.Hostname()}
 			if tlsCfg != nil {
 				c = tlsCfg.Clone()

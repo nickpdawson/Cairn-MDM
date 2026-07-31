@@ -15,11 +15,13 @@ builds:
       - CGO_ENABLED=0
     flags:
       - -trimpath
+    # CommitDate (not the build clock) keeps release builds reproducible.
+    mod_timestamp: "{{ .CommitTimestamp }}"
     ldflags:
       - -s -w
       - -X github.com/dzsec/cairn/internal/version.Version={{.Version}}
       - -X github.com/dzsec/cairn/internal/version.Commit={{.ShortCommit}}
-      - -X github.com/dzsec/cairn/internal/version.Date={{.Date}}
+      - -X github.com/dzsec/cairn/internal/version.Date={{.CommitDate}}
     goos:
       - freebsd
       - linux

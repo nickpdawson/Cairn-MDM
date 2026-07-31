@@ -12,6 +12,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"os"
 	"sort"
 	"strings"
 
@@ -45,12 +46,34 @@ func Open(ctx context.Context, path string) (*DB, error) {
 		return nil, fmt.Errorf("ping sqlite %q: %w", path, err)
 	}
 
+	// The database file holds the CA private key, APNs key, and session tokens.
+	// Restrict it (and its WAL/SHM siblings) to owner-only (MDM-SEC-002). Best
+	// effort: the WAL/SHM files may not exist yet, and we re-assert after
+	// migrations since a checkpoint can create them.
+	restrictPerms(path)
+
 	db := &DB{sql: sqldb}
 	if err := db.migrate(ctx); err != nil {
 		sqldb.Close()
 		return nil, err
 	}
+
+	restrictPerms(path)
+
 	return db, nil
+}
+
+// restrictPerms best-effort chmods the SQLite database file and its WAL/SHM
+// siblings to 0600. Missing siblings are not an error (they are created lazily);
+// any other chmod failure is ignored so that a database on a filesystem without
+// unix permissions (or a read-only mount) still opens.
+func restrictPerms(path string) {
+	for _, p := range []string{path, path + "-wal", path + "-shm"} {
+		if err := os.Chmod(p, 0o600); err != nil && !os.IsNotExist(err) {
+			// Intentionally ignored: hardening is best effort.
+			_ = err
+		}
+	}
 }
 
 // SQL exposes the underlying handle for the storage implementations in later

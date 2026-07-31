@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"errors"
@@ -40,10 +41,13 @@ func (s *SessionStore) Create(ctx context.Context, id Identity) (*Session, error
 	csrf := randomToken()
 	expires := time.Now().Add(s.ttl).UTC()
 
+	// Only the hash of the token is persisted; the raw token lives solely in the
+	// caller's cookie (MDM-AUTH-001). A stolen database therefore yields no
+	// usable session tokens.
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO app_sessions (token, username, role, display_name, provider, csrf_token, expires_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		token, id.Username, string(id.Role), id.DisplayName, providerOr(id.Provider), csrf,
+		hashToken(token), id.Username, string(id.Role), id.DisplayName, providerOr(id.Provider), csrf,
 		expires.Format(time.RFC3339))
 	if err != nil {
 		return nil, err
@@ -61,7 +65,7 @@ func (s *SessionStore) Get(ctx context.Context, token string) (*Session, error) 
 	)
 	err := s.db.QueryRowContext(ctx,
 		`SELECT username, role, display_name, provider, csrf_token, expires_at
-		 FROM app_sessions WHERE token = ?`, token).
+		 FROM app_sessions WHERE token = ?`, hashToken(token)).
 		Scan(&username, &role, &display, &provider, &csrf, &expires)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNoSession
@@ -84,7 +88,7 @@ func (s *SessionStore) Get(ctx context.Context, token string) (*Session, error) 
 
 // Delete removes a session (logout).
 func (s *SessionStore) Delete(ctx context.Context, token string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM app_sessions WHERE token = ?`, token)
+	_, err := s.db.ExecContext(ctx, `DELETE FROM app_sessions WHERE token = ?`, hashToken(token))
 	return err
 }
 
@@ -101,6 +105,13 @@ func randomToken() string {
 	var b [32]byte
 	_, _ = rand.Read(b[:])
 	return hex.EncodeToString(b[:])
+}
+
+// hashToken returns the hex-encoded SHA-256 of a raw session token. Only this
+// value is stored in app_sessions; the raw token never touches the database.
+func hashToken(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:])
 }
 
 func providerOr(p string) string {

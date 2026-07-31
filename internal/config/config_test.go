@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -130,6 +131,59 @@ mode = "import"
 `)
 	if _, err := Load(p); err == nil {
 		t.Fatal("expected error: import CA without cert_file/key_file")
+	}
+}
+
+// ldapConfig builds a minimal valid-except-for-transport LDAP config. The
+// caller supplies the servers array literal and whether start_tls is set.
+func ldapConfig(t *testing.T, serversTOML string, startTLS bool) string {
+	t.Helper()
+	t.Setenv("TEST_LDAP_BIND_PW", "secret")
+	return `
+[server]
+public_url = "https://mdm.example.com"
+listen = ":8443"
+[server.tls]
+mode = "proxy"
+[auth.ldap]
+enabled = true
+servers = ` + serversTOML + `
+start_tls = ` + boolStr(startTLS) + `
+base_dn = "DC=example,DC=org"
+bind_dn = "CN=svc,DC=example,DC=org"
+bind_password_env = "TEST_LDAP_BIND_PW"
+`
+}
+
+func boolStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
+}
+
+func TestLDAPSPasses(t *testing.T) {
+	p := writeTemp(t, ldapConfig(t, `["ldaps://dc1.example.org:636"]`, false))
+	if _, err := Load(p); err != nil {
+		t.Fatalf("ldaps:// should pass validation, got: %v", err)
+	}
+}
+
+func TestLDAPWithStartTLSPasses(t *testing.T) {
+	p := writeTemp(t, ldapConfig(t, `["ldap://dc1.example.org:389"]`, true))
+	if _, err := Load(p); err != nil {
+		t.Fatalf("ldap:// with start_tls should pass validation, got: %v", err)
+	}
+}
+
+func TestLDAPPlaintextWithoutStartTLSFails(t *testing.T) {
+	p := writeTemp(t, ldapConfig(t, `["ldap://dc1.example.org:389"]`, false))
+	_, err := Load(p)
+	if err == nil {
+		t.Fatal("expected error: bare ldap:// without start_tls must be rejected")
+	}
+	if !strings.Contains(err.Error(), "start_tls") {
+		t.Errorf("error should mention start_tls, got: %v", err)
 	}
 }
 

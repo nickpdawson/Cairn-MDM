@@ -27,6 +27,7 @@ func (a *App) handleGroups(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleGroupCreate(w http.ResponseWriter, r *http.Request) {
+	limitForm(w, r)
 	if !a.checkCSRF(r) {
 		http.Error(w, "invalid CSRF token", http.StatusForbidden)
 		return
@@ -119,6 +120,7 @@ func (a *App) handleGroupDelete(w http.ResponseWriter, r *http.Request) {
 // handleGroupDeviceChange adds or removes a device (action=add|remove).
 // Adding triggers a reconcile for that device.
 func (a *App) handleGroupDeviceChange(w http.ResponseWriter, r *http.Request) {
+	limitForm(w, r)
 	if !a.checkCSRF(r) {
 		http.Error(w, "invalid CSRF token", http.StatusForbidden)
 		return
@@ -158,6 +160,7 @@ func (a *App) handleGroupDeviceChange(w http.ResponseWriter, r *http.Request) {
 // handleGroupProfileChange assigns or unassigns a profile (action=assign|unassign).
 // Assigning triggers a reconcile for the whole group.
 func (a *App) handleGroupProfileChange(w http.ResponseWriter, r *http.Request) {
+	limitForm(w, r)
 	if !a.checkCSRF(r) {
 		http.Error(w, "invalid CSRF token", http.StatusForbidden)
 		return

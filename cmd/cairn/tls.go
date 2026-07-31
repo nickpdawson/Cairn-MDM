@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"time"
 
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
@@ -49,7 +50,14 @@ func configureTLS(cfg config.Config, srv *http.Server, log *slog.Logger) (func()
 		// HTTP-01 challenge + redirect helper on :80.
 		go func() {
 			log.Info("acme http-01 helper listening", "addr", ":80")
-			if err := http.ListenAndServe(":80", m.HTTPHandler(nil)); err != nil {
+			helper := &http.Server{
+				Addr:              ":80",
+				Handler:           m.HTTPHandler(nil),
+				ReadHeaderTimeout: 10 * time.Second,
+				ReadTimeout:       30 * time.Second,
+				WriteTimeout:      30 * time.Second,
+			}
+			if err := helper.ListenAndServe(); err != nil {
 				log.Warn("acme http helper stopped", "err", err)
 			}
 		}()

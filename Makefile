@@ -2,7 +2,9 @@ BINARY   := cairn
 PKG      := github.com/dzsec/cairn
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT   ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
-DATE     ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+# Use the commit date (UTC, RFC3339) so builds are reproducible: the same
+# commit always stamps the same date. Override with `make DATE=... build`.
+DATE     ?= $(shell TZ=UTC git log -1 --format=%cd --date=format-local:%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)
 LDFLAGS  := -s -w \
 	-X $(PKG)/internal/version.Version=$(VERSION) \
 	-X $(PKG)/internal/version.Commit=$(COMMIT) \

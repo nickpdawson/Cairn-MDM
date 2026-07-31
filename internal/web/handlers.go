@@ -3,9 +3,44 @@ package web
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
+
+// maxFormBytes bounds ordinary form POST bodies (login, group and builder
+// forms). The profile upload has its own, larger limit (maxProfileBytes).
+const maxFormBytes = 64 << 10
+
+// limitForm caps the request body before it is parsed, so a hostile client
+// can't stream an unbounded form into memory.
+func limitForm(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxFormBytes)
+}
+
+// sameOrigin is a defense-in-depth companion to the CSRF token: it rejects a
+// mutating request whose Origin (or, absent that, Referer) host does not match
+// the configured public URL. A request with neither header is allowed — that
+// covers non-browser API clients and older browsers that omit Origin on
+// same-origin navigations. Only a present-but-mismatched header is a reject.
+func sameOrigin(r *http.Request, publicURL string) bool {
+	want, err := url.Parse(publicURL)
+	if err != nil || want.Host == "" {
+		return true // can't determine the expected host; don't block
+	}
+	src := r.Header.Get("Origin")
+	if src == "" {
+		src = r.Header.Get("Referer")
+	}
+	if src == "" {
+		return true // no Origin/Referer supplied
+	}
+	got, err := url.Parse(src)
+	if err != nil || got.Host == "" {
+		return false
+	}
+	return strings.EqualFold(got.Host, want.Host)
+}
 
 // render executes a template as a full page. On error it logs and writes a 500.
 func (a *App) render(w http.ResponseWriter, r *http.Request, status int, name string, data map[string]any) {
@@ -33,6 +68,7 @@ func (a *App) handleLoginForm(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
+	limitForm(w, r)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
@@ -169,6 +205,9 @@ func (a *App) handleDevices(w http.ResponseWriter, r *http.Request) {
 func (a *App) checkCSRF(r *http.Request) bool {
 	sess := a.currentSession(r)
 	if sess == nil {
+		return false
+	}
+	if !sameOrigin(r, a.cfg.PublicURL) {
 		return false
 	}
 	got := r.PostFormValue("csrf")

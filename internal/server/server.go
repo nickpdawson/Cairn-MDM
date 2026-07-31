@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/dzsec/cairn/internal/config"
@@ -55,7 +56,52 @@ func New(cfg config.Config, log *slog.Logger, ready Readiness, deps Deps) *Serve
 
 // Handler returns the root handler wrapped in the base middleware chain.
 func (s *Server) Handler() http.Handler {
-	return s.recoverer(s.accessLog(s.mux))
+	return s.recoverer(s.secureHeaders(s.accessLog(s.mux)))
+}
+
+// secureHeaders sets baseline security headers on every response and marks
+// sensitive paths uncacheable.
+//
+// The CSP keeps 'unsafe-inline' for styles and scripts on purpose: the admin
+// templates use inline styles and inline onsubmit/onclick handlers. HSTS is only
+// emitted when the request arrived over TLS — either directly (r.TLS != nil) or
+// via a reverse proxy that set X-Forwarded-Proto=https — so plaintext/proxy
+// deployments that terminate TLS elsewhere don't pin an origin the browser can't
+// reach. This assumes the fronting proxy strips a client-supplied
+// X-Forwarded-Proto, which is standard reverse-proxy practice.
+func (s *Server) secureHeaders(next http.Handler) http.Handler {
+	const csp = "default-src 'self'; style-src 'self' 'unsafe-inline'; " +
+		"script-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
+		"object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Referrer-Policy", "no-referrer")
+		h.Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+		h.Set("Content-Security-Policy", csp)
+		if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
+		if sensitivePath(r.URL.Path) {
+			h.Set("Cache-Control", "no-store")
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// sensitivePath reports whether a path serves authenticated or credential-bearing
+// content that must never be cached (admin console, login/logout, enrollment).
+func sensitivePath(p string) bool {
+	switch {
+	case p == "/admin" || strings.HasPrefix(p, "/admin/"):
+		return true
+	case p == "/login" || p == "/logout":
+		return true
+	case p == "/enroll" || strings.HasPrefix(p, "/enroll/"):
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *Server) routes() {
@@ -102,9 +148,12 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	if s.ready != nil {
 		if err := s.ready.Ping(ctx); err != nil {
+			// Log the dependency detail server-side; return a generic body so we
+			// don't leak backend errors (DSNs, driver messages) to clients.
+			s.log.Warn("readiness check failed", "err", err)
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{
 				"status": "unavailable",
-				"error":  err.Error(),
+				"error":  "not ready",
 			})
 			return
 		}

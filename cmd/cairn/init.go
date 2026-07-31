@@ -87,11 +87,19 @@ func runInit(ctx context.Context, args []string) error {
 		return fmt.Errorf("configuration incomplete:\n%w", err)
 	}
 
-	// Admin password: use provided, else generate a strong one and print it.
+	// Admin password: use provided, else prompt without echo (interactive) or
+	// generate a strong one and print it (non-interactive / blank at prompt).
 	generatedPass := ""
+	if *adminPass != "" {
+		warnPasswordOnCLI()
+	}
 	if *adminPass == "" {
 		if interactive {
-			*adminPass = prompt(in, fmt.Sprintf("Password for admin %q (blank to auto-generate)", *adminUser))
+			pw, perr := readOptionalPasswordConfirm(fmt.Sprintf("Password for admin %q (blank to auto-generate)", *adminUser))
+			if perr != nil {
+				return perr
+			}
+			*adminPass = pw
 		}
 		if *adminPass == "" {
 			*adminPass = randomPassword()

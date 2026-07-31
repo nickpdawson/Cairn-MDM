@@ -21,6 +21,7 @@ func (a *App) handleBuilderWiFiForm(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleBuilderWiFi(w http.ResponseWriter, r *http.Request) {
+	limitForm(w, r)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
@@ -86,6 +87,7 @@ func (a *App) handleBuilderSSOForm(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleBuilderSSO(w http.ResponseWriter, r *http.Request) {
+	limitForm(w, r)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return

@@ -6,12 +6,12 @@ env overrides and file/env-only secrets, pure-Go SQLite storage with an embedded
 migration runner, `/healthz` `/readyz` `/version`, Makefile + goreleaser + CI
 (cross-compile matrix incl. FreeBSD, gitleaks). MIT licensed.
 
-## Phase 1 — minimal enroll + push ✅ (code) · ⏳ (real-device gate)
+## Phase 1 — minimal enroll + push ✅ (code) · ✅ (real-device gate, 2026-07-31)
 SQLite backend implementing NanoMDM's `AllStorage` (validated by NanoMDM's own
 `test/e2e` suite), the MDM service chain on `/mdm`, embedded SCEP CA, enrollment
 profile builder + PKCS7 signing, APNs push + push-cert loader, `/enroll`, and the
-`pushcert`/`enqueue` CLIs. Remaining: the manual real-device gate (Apple hardware
-+ real APNs cert + public TLS) — procedure below.
+`pushcert`/`enqueue` CLIs. The manual real-device gate (Apple hardware + real
+APNs cert + public TLS) passed on 2026-07-31 — details below.
 
 ## Phase 2 — flexible PKI, one-command setup, admin console ✅
 | Piece | Package | Validation |

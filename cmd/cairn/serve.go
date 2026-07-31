@@ -112,6 +112,10 @@ func runServe(ctx context.Context, args []string) error {
 		Addr:              cfg.Server.Listen,
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,  // full request incl. body (uploads cap at 2 MiB)
+		WriteTimeout:      60 * time.Second,  // profile downloads / rendered pages
+		IdleTimeout:       120 * time.Second, // keep-alive reuse window
+		MaxHeaderBytes:    1 << 20,           // 1 MiB of request headers
 	}
 
 	serveTLS, err := configureTLS(cfg, httpSrv, log)

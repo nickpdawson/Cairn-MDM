@@ -16,7 +16,7 @@ type MySQLSource struct {
 }
 
 // OpenMySQL connects to the source. DSN format is go-sql-driver's, e.g.
-// "nanomdm:pass@tcp(10.15.15.117:3306)/nanomdm".
+// "nanomdm:pass@tcp(db.example.internal:3306)/nanomdm".
 func OpenMySQL(dsn string) (*MySQLSource, error) {
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {

@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 
+	"golang.org/x/term"
+
 	"github.com/dzsec/cairn/internal/auth"
 	"github.com/dzsec/cairn/internal/config"
 	"github.com/dzsec/cairn/internal/storage/sqlite"
@@ -114,7 +116,17 @@ func runAdminAdd(ctx context.Context, args []string) error {
 
 	pw := *password
 	generated := false
-	if pw == "" {
+	switch {
+	case *password != "":
+		warnPasswordOnCLI()
+	case isTerminal():
+		p, perr := readPasswordConfirm(fmt.Sprintf("Password for %q", *username))
+		if perr != nil {
+			return perr
+		}
+		pw = p
+	default:
+		// Non-interactive with no password supplied: generate one and print it.
 		pw = randomPassword()
 		generated = true
 	}
@@ -148,7 +160,17 @@ func runAdminPasswd(ctx context.Context, args []string) error {
 	}
 	pw := *password
 	generated := false
-	if pw == "" {
+	switch {
+	case *password != "":
+		warnPasswordOnCLI()
+	case isTerminal():
+		p, perr := readPasswordConfirm(fmt.Sprintf("New password for %q", *username))
+		if perr != nil {
+			return perr
+		}
+		pw = p
+	default:
+		// Non-interactive with no password supplied: generate one and print it.
 		pw = randomPassword()
 		generated = true
 	}
@@ -216,4 +238,61 @@ func runAdminDel(ctx context.Context, args []string) error {
 	}
 	fmt.Printf("user %q deleted (their sessions are revoked)\n", *username)
 	return nil
+}
+
+// warnPasswordOnCLI notes on stderr that a password passed via -password can be
+// captured in shell history and is visible to anyone who can run `ps`. Prefer
+// the interactive no-echo prompt.
+func warnPasswordOnCLI() {
+	fmt.Fprintln(os.Stderr, "warning: -password on the command line may be visible in shell history and process listings (ps); prefer the interactive prompt")
+}
+
+// readPasswordConfirm reads a non-empty password twice from the terminal without
+// echoing it, and requires the two entries to match. Prompts go to stderr so
+// stdout stays clean for scripted consumers.
+func readPasswordConfirm(label string) (string, error) {
+	fmt.Fprintf(os.Stderr, "%s: ", label)
+	first, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Fprintln(os.Stderr)
+	if err != nil {
+		return "", fmt.Errorf("read password: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, "%s (again): ", label)
+	second, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Fprintln(os.Stderr)
+	if err != nil {
+		return "", fmt.Errorf("read password: %w", err)
+	}
+	if string(first) != string(second) {
+		return "", fmt.Errorf("passwords do not match")
+	}
+	if len(first) == 0 {
+		return "", fmt.Errorf("password must not be empty")
+	}
+	return string(first), nil
+}
+
+// readOptionalPasswordConfirm reads a password without echo, allowing an empty
+// entry (the caller treats empty as "auto-generate"). A non-empty entry is
+// confirmed by re-entry.
+func readOptionalPasswordConfirm(label string) (string, error) {
+	fmt.Fprintf(os.Stderr, "%s: ", label)
+	first, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Fprintln(os.Stderr)
+	if err != nil {
+		return "", fmt.Errorf("read password: %w", err)
+	}
+	if len(first) == 0 {
+		return "", nil
+	}
+	fmt.Fprintf(os.Stderr, "%s (again): ", label)
+	second, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Fprintln(os.Stderr)
+	if err != nil {
+		return "", fmt.Errorf("read password: %w", err)
+	}
+	if string(first) != string(second) {
+		return "", fmt.Errorf("passwords do not match")
+	}
+	return string(first), nil
 }
