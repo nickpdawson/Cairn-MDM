@@ -187,6 +187,72 @@ func TestLDAPPlaintextWithoutStartTLSFails(t *testing.T) {
 	}
 }
 
+func TestLoginPolicyWithDefaults(t *testing.T) {
+	// An entirely zero policy fills in every default.
+	got := LoginPolicy{}.WithDefaults()
+	want := LoginPolicy{
+		MaxAttempts: 5, WindowSeconds: 300, LockoutSeconds: 900,
+		MinPasswordLen: 8, IdleTimeoutMins: 60, MaxLifetimeMins: 720,
+	}
+	if got != want {
+		t.Errorf("WithDefaults() = %+v, want %+v", got, want)
+	}
+
+	// Explicit values survive; only the zero fields are defaulted.
+	partial := LoginPolicy{MaxAttempts: 10, MinPasswordLen: 16}.WithDefaults()
+	if partial.MaxAttempts != 10 {
+		t.Errorf("MaxAttempts = %d, want explicit 10", partial.MaxAttempts)
+	}
+	if partial.MinPasswordLen != 16 {
+		t.Errorf("MinPasswordLen = %d, want explicit 16", partial.MinPasswordLen)
+	}
+	if partial.WindowSeconds != 300 {
+		t.Errorf("WindowSeconds = %d, want default 300", partial.WindowSeconds)
+	}
+}
+
+func TestValidateRejectsNegativeLoginPolicy(t *testing.T) {
+	p := writeTemp(t, `
+[server]
+public_url = "https://mdm.example.com"
+listen = ":8443"
+[server.tls]
+mode = "proxy"
+[storage]
+driver = "sqlite"
+path = "/tmp/x.db"
+[auth.login]
+max_attempts = -1
+`)
+	_, err := Load(p)
+	if err == nil {
+		t.Fatal("expected error for negative auth.login.max_attempts")
+	}
+	if !strings.Contains(err.Error(), "max_attempts") {
+		t.Errorf("error should mention max_attempts, got: %v", err)
+	}
+}
+
+func TestLoginPolicyDefaultsWhenOmitted(t *testing.T) {
+	p := writeTemp(t, `
+[server]
+public_url = "https://mdm.example.com"
+listen = ":8443"
+[server.tls]
+mode = "proxy"
+[storage]
+driver = "sqlite"
+path = "/tmp/x.db"
+`)
+	cfg, err := Load(p)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.Auth.Login.WithDefaults().MaxAttempts; got != 5 {
+		t.Errorf("omitted [auth.login] MaxAttempts default = %d, want 5", got)
+	}
+}
+
 func TestGenerateCAIsDefault(t *testing.T) {
 	p := writeTemp(t, `
 [server]

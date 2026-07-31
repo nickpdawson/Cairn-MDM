@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/dzsec/cairn/internal/auth"
+	"github.com/dzsec/cairn/internal/config"
 	"github.com/dzsec/cairn/internal/storage/sqlite"
 )
 
@@ -85,6 +86,34 @@ func TestLoginSetsSessionAndDashboardLoads(t *testing.T) {
 	}
 	if !strings.Contains(rr2.Body.String(), "Dashboard") {
 		t.Error("dashboard body missing expected content")
+	}
+}
+
+func TestLoginThrottleReturns429(t *testing.T) {
+	app, _, _ := testApp(t)
+	app.SetLoginThrottle(auth.NewLoginThrottle(config.LoginPolicy{
+		MaxAttempts: 3, WindowSeconds: 300, LockoutSeconds: 300,
+	}))
+	m := mux(app)
+
+	got429 := false
+	for i := 0; i < 6; i++ {
+		form := strings.NewReader("username=nick&password=wrong")
+		req := httptest.NewRequest(http.MethodPost, "/login", form)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.RemoteAddr = "203.0.113.9:5555"
+		rr := httptest.NewRecorder()
+		m.ServeHTTP(rr, req)
+		if rr.Code == http.StatusTooManyRequests {
+			got429 = true
+			if rr.Header().Get("Retry-After") == "" {
+				t.Error("429 response missing Retry-After header")
+			}
+			break
+		}
+	}
+	if !got429 {
+		t.Fatal("expected a 429 after repeated bad logins")
 	}
 }
 

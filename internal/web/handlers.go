@@ -2,11 +2,51 @@ package web
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/dzsec/cairn/internal/auth"
 )
+
+// loginThrottles associates a *LoginThrottle with an App without adding a field
+// to the App struct, whose definition lives in web.go (outside this change's
+// file ownership). Production runs a single long-lived App, so the map holds at
+// most a handful of entries.
+var loginThrottles sync.Map // key: *App, value: *auth.LoginThrottle
+
+// SetLoginThrottle installs the brute-force limiter used by handleLogin. Passing
+// nil disables throttling (the default), which keeps callers that never set one
+// working unchanged.
+func (a *App) SetLoginThrottle(t *auth.LoginThrottle) {
+	if t == nil {
+		loginThrottles.Delete(a)
+		return
+	}
+	loginThrottles.Store(a, t)
+}
+
+// loginThrottle returns the installed throttle, or nil if none is set.
+func (a *App) loginThrottle() *auth.LoginThrottle {
+	if v, ok := loginThrottles.Load(a); ok {
+		return v.(*auth.LoginThrottle)
+	}
+	return nil
+}
+
+// clientIP extracts the host portion of r.RemoteAddr (dropping the port). It
+// falls back to the raw RemoteAddr if it has no host:port shape.
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
 
 // maxFormBytes bounds ordinary form POST bodies (login, group and builder
 // forms). The profile upload has its own, larger limit (maxProfileBytes).
@@ -76,13 +116,32 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 	username := strings.TrimSpace(r.PostFormValue("username"))
 	password := r.PostFormValue("password")
 
+	throttle := a.loginThrottle()
+	throttleKey := username + "|" + clientIP(r)
+	if throttle != nil {
+		if ok, retryAfter := throttle.Allowed(throttleKey); !ok {
+			a.log.Warn("login throttled", "username", username, "remote", r.RemoteAddr, "retry_after", retryAfter)
+			w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter.Seconds())+1))
+			a.render(w, r, http.StatusTooManyRequests, "login.html", map[string]any{
+				"Error": "Too many attempts. Please try again later.", "Username": username,
+			})
+			return
+		}
+	}
+
 	id, err := a.auth.Authenticate(r.Context(), username, password)
 	if err != nil {
+		if throttle != nil {
+			throttle.RecordFailure(throttleKey)
+		}
 		a.log.Info("failed login", "username", username, "remote", r.RemoteAddr)
 		a.render(w, r, http.StatusUnauthorized, "login.html", map[string]any{
 			"Error": "Incorrect username or password.", "Username": username,
 		})
 		return
+	}
+	if throttle != nil {
+		throttle.RecordSuccess(throttleKey)
 	}
 
 	sess, err := a.sessions.Create(r.Context(), *id)

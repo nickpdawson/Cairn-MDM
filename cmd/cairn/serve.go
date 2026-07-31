@@ -65,7 +65,14 @@ func runServe(ctx context.Context, args []string) error {
 	// Admin console.
 	pusher := push.NewPusher(nanoStore, mdmcore.NewLogAdapter(log))
 	commander := mdmcore.NewCommander(nanoStore, pusher).WithRecorder(db, log)
-	sessions := auth.NewSessionStore(db.SQL(), 12*time.Hour)
+
+	// Login abuse controls (MDM-AUTH-001): session idle timeout + absolute cap
+	// come from the login policy; a bare [auth.login] table still yields working
+	// defaults via WithDefaults.
+	loginPolicy := cfg.Auth.Login.WithDefaults()
+	sessions := auth.NewSessionStore(db.SQL(), time.Duration(loginPolicy.IdleTimeoutMins)*time.Minute)
+	sessions.SetMaxLifetime(time.Duration(loginPolicy.MaxLifetimeMins) * time.Minute)
+	loginThrottle := auth.NewLoginThrottle(cfg.Auth.Login)
 
 	// Session cleanup: purge expired rows hourly.
 	go func() {
@@ -105,6 +112,7 @@ func runServe(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	console.SetLoginThrottle(loginThrottle)
 	deps.UI = console
 	log.Info("admin console ready", "path", "/admin")
 

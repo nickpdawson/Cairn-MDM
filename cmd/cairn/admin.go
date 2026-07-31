@@ -93,7 +93,9 @@ func openLocalStore(ctx context.Context, configPath string) (*auth.LocalStore, *
 	if err != nil {
 		return nil, nil, err
 	}
-	return auth.NewLocalStore(db.SQL()), db, nil
+	local := auth.NewLocalStore(db.SQL())
+	local.SetMinPasswordLen(cfg.Auth.Login.WithDefaults().MinPasswordLen)
+	return local, db, nil
 }
 
 func runAdminAdd(ctx context.Context, args []string) error {
@@ -187,6 +189,15 @@ func runAdminPasswd(ctx context.Context, args []string) error {
 	fmt.Printf("password reset for %q\n", *username)
 	if generated {
 		fmt.Printf("password: %s\n", pw)
+	}
+
+	// Invalidate the user's existing sessions so the old password can't outlive
+	// the reset (best-effort; a failure here doesn't undo the password change).
+	sessions := auth.NewSessionStore(db.SQL(), 0)
+	if n, err := sessions.DeleteByUsername(ctx, *username); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not revoke existing sessions for %q: %v\n", *username, err)
+	} else if n > 0 {
+		fmt.Printf("revoked %d active session(s) for %q\n", n, *username)
 	}
 	return nil
 }

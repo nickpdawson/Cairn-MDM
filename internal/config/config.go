@@ -84,7 +84,57 @@ type Enrollment struct {
 // always enabled (they are the break-glass path); external providers are
 // tried first when configured, with local as the fallback.
 type Auth struct {
-	LDAP LDAPCfg `toml:"ldap"`
+	LDAP  LDAPCfg     `toml:"ldap"`
+	Login LoginPolicy `toml:"login"`
+}
+
+// LoginPolicy configures brute-force throttling, the local password floor, and
+// session-lifetime bounds (MDM-AUTH-001). Every field has a working default, so
+// an omitted [auth.login] table still yields a safe policy — call WithDefaults
+// before use to fill zero values.
+type LoginPolicy struct {
+	// MaxAttempts is the number of failed logins per user+IP within the window
+	// before a lockout begins. Default 5.
+	MaxAttempts int `toml:"max_attempts"`
+	// WindowSeconds is the sliding window over which failures are counted.
+	// Default 300 (5 minutes).
+	WindowSeconds int `toml:"window_seconds"`
+	// LockoutSeconds is how long a user+IP stays locked out once MaxAttempts is
+	// reached. Default 900 (15 minutes).
+	LockoutSeconds int `toml:"lockout_seconds"`
+	// MinPasswordLen is the minimum length for a local-account password.
+	// Default 8.
+	MinPasswordLen int `toml:"min_password_len"`
+	// IdleTimeoutMins is the session idle timeout; each authenticated request
+	// slides the session's expiry forward by this amount. Default 60.
+	IdleTimeoutMins int `toml:"idle_timeout_mins"`
+	// MaxLifetimeMins caps a session's absolute lifetime regardless of activity.
+	// Default 720 (12 hours).
+	MaxLifetimeMins int `toml:"max_lifetime_mins"`
+}
+
+// WithDefaults returns a copy of p with any zero-valued field replaced by its
+// default. It never mutates the receiver.
+func (p LoginPolicy) WithDefaults() LoginPolicy {
+	if p.MaxAttempts == 0 {
+		p.MaxAttempts = 5
+	}
+	if p.WindowSeconds == 0 {
+		p.WindowSeconds = 300
+	}
+	if p.LockoutSeconds == 0 {
+		p.LockoutSeconds = 900
+	}
+	if p.MinPasswordLen == 0 {
+		p.MinPasswordLen = 8
+	}
+	if p.IdleTimeoutMins == 0 {
+		p.IdleTimeoutMins = 60
+	}
+	if p.MaxLifetimeMins == 0 {
+		p.MaxLifetimeMins = 720
+	}
+	return p
 }
 
 // LDAPCfg configures directory (Active Directory / LDAP) login.
@@ -401,6 +451,25 @@ func (c Config) Validate() error {
 		}
 		if l.DefaultRole != "" && l.DefaultRole != "admin" && l.DefaultRole != "operator" && l.DefaultRole != "user" {
 			errs = append(errs, fmt.Errorf("auth.ldap.default_role must be admin|operator|user, got %q", l.DefaultRole))
+		}
+	}
+
+	// Login policy: reject any explicitly-negative value. Zero means "use the
+	// default" (see LoginPolicy.WithDefaults), so only negatives are errors.
+	lp := c.Auth.Login
+	for _, f := range []struct {
+		name string
+		val  int
+	}{
+		{"max_attempts", lp.MaxAttempts},
+		{"window_seconds", lp.WindowSeconds},
+		{"lockout_seconds", lp.LockoutSeconds},
+		{"min_password_len", lp.MinPasswordLen},
+		{"idle_timeout_mins", lp.IdleTimeoutMins},
+		{"max_lifetime_mins", lp.MaxLifetimeMins},
+	} {
+		if f.val < 0 {
+			errs = append(errs, fmt.Errorf("auth.login.%s must not be negative, got %d", f.name, f.val))
 		}
 	}
 

@@ -65,6 +65,30 @@ func TestCountUsersAndFirstRun(t *testing.T) {
 	}
 }
 
+func TestMinPasswordLen(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+
+	// Default (0) imposes no minimum.
+	if err := s.CreateUser(ctx, "nopolicy", "x", RoleUser, ""); err != nil {
+		t.Fatalf("zero-minimum store rejected a short password: %v", err)
+	}
+
+	s.SetMinPasswordLen(8)
+	if err := s.CreateUser(ctx, "a", "short", RoleAdmin, ""); err == nil {
+		t.Fatal("expected CreateUser to reject a password below the minimum")
+	}
+	if err := s.CreateUser(ctx, "a", "longenough", RoleAdmin, ""); err != nil {
+		t.Fatalf("CreateUser rejected a compliant password: %v", err)
+	}
+	if err := s.SetPassword(ctx, "a", "tiny"); err == nil {
+		t.Fatal("expected SetPassword to reject a password below the minimum")
+	}
+	if err := s.SetPassword(ctx, "a", "anotherlongone"); err != nil {
+		t.Fatalf("SetPassword rejected a compliant password: %v", err)
+	}
+}
+
 func TestRoleAtLeast(t *testing.T) {
 	if !RoleAdmin.AtLeast(RoleOperator) {
 		t.Error("admin should outrank operator")

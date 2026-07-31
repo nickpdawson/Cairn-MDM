@@ -15,10 +15,22 @@ var ErrInvalidCredentials = errors.New("invalid credentials")
 // LocalStore is the built-in local-account provider, backed by app_users.
 type LocalStore struct {
 	db *sql.DB
+	// minPasswordLen is the minimum length enforced on CreateUser/SetPassword.
+	// Zero (the default) disables the policy.
+	minPasswordLen int
 }
 
 // NewLocalStore wraps a database handle.
 func NewLocalStore(db *sql.DB) *LocalStore { return &LocalStore{db: db} }
+
+// SetMinPasswordLen sets the minimum accepted local-password length. Zero (the
+// default) means no minimum. Negative values are treated as zero.
+func (s *LocalStore) SetMinPasswordLen(n int) {
+	if n < 0 {
+		n = 0
+	}
+	s.minPasswordLen = n
+}
 
 // Name identifies this provider.
 func (s *LocalStore) Name() string { return "local" }
@@ -28,6 +40,9 @@ func (s *LocalStore) Name() string { return "local" }
 func (s *LocalStore) CreateUser(ctx context.Context, username, password string, role Role, displayName string) error {
 	if username == "" || password == "" {
 		return errors.New("auth: username and password are required")
+	}
+	if len(password) < s.minPasswordLen {
+		return fmt.Errorf("auth: password must be at least %d characters", s.minPasswordLen)
 	}
 	if !role.Valid() {
 		return fmt.Errorf("auth: invalid role %q", role)
@@ -47,6 +62,9 @@ func (s *LocalStore) CreateUser(ctx context.Context, username, password string, 
 
 // SetPassword resets an existing user's password.
 func (s *LocalStore) SetPassword(ctx context.Context, username, password string) error {
+	if len(password) < s.minPasswordLen {
+		return fmt.Errorf("auth: password must be at least %d characters", s.minPasswordLen)
+	}
 	hash, err := argon2id.CreateHash(password, argon2id.DefaultParams)
 	if err != nil {
 		return fmt.Errorf("auth: hash password: %w", err)
