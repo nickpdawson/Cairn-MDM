@@ -12,6 +12,7 @@ import (
 	"github.com/dzsec/cairn/internal/ca"
 	"github.com/dzsec/cairn/internal/config"
 	"github.com/dzsec/cairn/internal/enroll"
+	"github.com/dzsec/cairn/internal/profile"
 	"github.com/dzsec/cairn/internal/push"
 	"github.com/dzsec/cairn/internal/server"
 )
@@ -39,11 +40,27 @@ func wirePKI(ctx context.Context, cfg config.Config, db *sql.DB, topics enroll.T
 	host := publicHost(cfg.Server.PublicURL)
 	org := "cairn." + host
 
+	// Optional profile-signing identity (validated at startup — a bad/expired
+	// signing cert fails the boot rather than silently serving unsigned).
+	var signer *profile.Signer
+	if s := cfg.Profile.Signing; s.Enabled() {
+		var err error
+		signer, err = profile.LoadSigner(s.CertFile, s.KeyFile)
+		if err != nil {
+			return nil, err
+		}
+		log.Info("enrollment profile signing enabled", "signer", signer.Fingerprint(),
+			"days_to_expiry", signer.DaysUntilExpiry())
+	} else {
+		log.Warn("enrollment profiles are UNSIGNED (set [profile.signing] cert_file/key_file)")
+	}
+
 	// mountEnroll builds the enroll handler and mounts both the grant route
 	// (GET /e/{token}) and the bare /enroll route (default-denied unless
 	// enrollment.allow_open).
 	mountEnroll := func(c enroll.Config) {
 		c.AllowOpen = cfg.Enrollment.AllowOpen
+		c.Signer = signer
 		h := enroll.New(c, topics, redeemer, push.SettingTopic, log)
 		deps.Enroll = h
 		deps.EnrollGrant = http.HandlerFunc(h.ServeGrant)

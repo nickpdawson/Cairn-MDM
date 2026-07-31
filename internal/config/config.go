@@ -69,6 +69,7 @@ type Config struct {
 	CA         CA         `toml:"ca"`
 	Auth       Auth       `toml:"auth"`
 	Enrollment Enrollment `toml:"enrollment"`
+	Profile    Profile    `toml:"profile"`
 	Log        Log        `toml:"log"`
 }
 
@@ -79,6 +80,24 @@ type Enrollment struct {
 	// for a low-stakes homelab that accepts an open enrollment endpoint.
 	AllowOpen bool `toml:"allow_open"`
 }
+
+// Profile configures configuration-profile handling.
+type Profile struct {
+	Signing SigningCfg `toml:"signing"`
+}
+
+// SigningCfg is the identity used to CMS-sign enrollment profiles so devices
+// show a verified signer. For the green "Verified" badge the cert must chain to
+// a root the device already trusts before install — i.e. a publicly-trusted
+// (Let's Encrypt/commercial) cert, not the device-identity CA. cert_file may be
+// a full chain (leaf first); intermediates are included in the signature.
+type SigningCfg struct {
+	CertFile string `toml:"cert_file"`
+	KeyFile  string `toml:"key_file"`
+}
+
+// Enabled reports whether profile signing is configured.
+func (s SigningCfg) Enabled() bool { return s.CertFile != "" || s.KeyFile != "" }
 
 // Auth configures the console's authentication providers. Local accounts are
 // always enabled (they are the break-glass path); external providers are
@@ -417,6 +436,12 @@ func (c Config) Validate() error {
 		}
 	default:
 		errs = append(errs, fmt.Errorf("ca.mode must be generate|import|external, got %q", c.CA.Mode))
+	}
+
+	if s := c.Profile.Signing; s.Enabled() {
+		if s.CertFile == "" || s.KeyFile == "" {
+			errs = append(errs, errors.New("profile.signing needs both cert_file and key_file"))
+		}
 	}
 
 	if l := c.Auth.LDAP; l.Enabled {
