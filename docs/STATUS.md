@@ -66,5 +66,13 @@ https (ATS), and extensiblesso `Type` must be `Credential` (capitalized).
 - **Phase 2 polish (optional)** — DB-backed audit log (mutations currently get
   structured slog entries with user attribution), live SSE command results,
   "install/remove profile now" one-off actions from the device page.
-- **Phase 3+** — OIDC/LDAP/Kerberos providers, DZsec migration (`import --from-mysql`),
-  DDM, ABM/ADE, packaging polish.
+- **Done since the gate**: `cairn import -from-mysql` with always-on
+  verification (replay-based, zero re-enrollment; docs/migrating-from-nanomdm.md);
+  `cairn admin` account CLI; `cairn pushcert request/decrypt` (mdmcert.download
+  wizard, proven against the live service); LDAP/AD auth provider + chain with
+  explicit group→role mapping (live-verified against a real DC over LDAPS);
+  `cairn admin testauth`.
+- **Phase 3 remainder** — production cutover itself (rehearsal → NPM repoint →
+  ping-all; operator-driven), trusted-proxy header auth.
+- **Phase 4+** — OIDC + Kerberos/SPNEGO providers, MySQL/Postgres app storage,
+  Prometheus metrics, DDM, ABM/ADE, packaging polish.
