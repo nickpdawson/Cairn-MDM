@@ -118,7 +118,7 @@ func TestBuildKerberosSSO(t *testing.T) {
 		t.Errorf("realm = %v, want EXAMPLE.ORG", sso["Realm"])
 	}
 	if sso["ExtensionIdentifier"] != "com.apple.AppSSOKerberos.KerberosExtension" ||
-		sso["TeamIdentifier"] != "apple" || sso["Type"] != "credential" {
+		sso["TeamIdentifier"] != "apple" || sso["Type"] != "Credential" {
 		t.Errorf("extension identity wrong: %v", sso)
 	}
 	if hosts := sso["Hosts"].([]any); len(hosts) != 2 {

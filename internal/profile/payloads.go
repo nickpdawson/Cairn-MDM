@@ -176,7 +176,10 @@ func BuildKerberosSSO(p KerberosSSOParams) (map[string]any, error) {
 		"PayloadDisplayName":  "Kerberos Single Sign-On",
 		"ExtensionIdentifier": "com.apple.AppSSOKerberos.KerberosExtension",
 		"TeamIdentifier":      "apple",
-		"Type":                "credential",
+		// "Credential" (capitalized) per Apple's schema rangelist. macOS 27+
+		// enforces the case strictly; the lowercase form older docs used is
+		// rejected with "invalid value" at install time.
+		"Type": "Credential",
 		"Realm":               realm,
 		"Hosts":               hosts,
 		"ExtensionData": map[string]any{
