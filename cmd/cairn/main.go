@@ -54,6 +54,8 @@ func main() {
 		err = runCA(ctx, args)
 	case "admin":
 		err = runAdmin(ctx, args)
+	case "import":
+		err = runImport(ctx, args)
 	case "version", "-v", "--version":
 		fmt.Println(version.Info())
 	case "help", "-h", "--help":
@@ -84,6 +86,7 @@ Commands:
   enqueue    queue a command for a device and push
   ca         manage the certificate authority (export)
   admin      manage console accounts (add, passwd, list, del)
+  import     migrate a NanoMDM MySQL deployment (zero re-enrollment)
   version    print build information
   help       show this help
 

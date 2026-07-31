@@ -143,6 +143,21 @@ func firstError(chain []mdm.ErrorChain) string {
 	return desc
 }
 
+// RecordFromAuthenticate builds a DeviceRecord from an Authenticate message,
+// including the attributes only present in the raw plist. Used by the live
+// EventService and by the v1 importer (which replays stored Authenticate
+// messages and must project the same inventory rows a live check-in would).
+func RecordFromAuthenticate(id string, m *mdm.Authenticate) DeviceRecord {
+	rec := DeviceRecord{
+		ID:     id,
+		UDID:   m.UDID,
+		Serial: m.SerialNumber,
+		Topic:  m.Topic,
+	}
+	enrichFromRaw(&rec, m.Raw)
+	return rec
+}
+
 // enrichFromRaw pulls the nice-to-have device attributes (name, model, OS) out
 // of the raw Authenticate plist, which NanoMDM's struct does not expose.
 func enrichFromRaw(rec *DeviceRecord, raw []byte) {

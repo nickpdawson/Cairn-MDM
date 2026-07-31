@@ -179,9 +179,9 @@ func BuildKerberosSSO(p KerberosSSOParams) (map[string]any, error) {
 		// "Credential" (capitalized) per Apple's schema rangelist. macOS 27+
 		// enforces the case strictly; the lowercase form older docs used is
 		// rejected with "invalid value" at install time.
-		"Type": "Credential",
-		"Realm":               realm,
-		"Hosts":               hosts,
+		"Type":  "Credential",
+		"Realm": realm,
+		"Hosts": hosts,
 		"ExtensionData": map[string]any{
 			"isDefaultRealm":       p.DefaultRealm,
 			"syncLocalPassword":    p.SyncLocalPassword,
