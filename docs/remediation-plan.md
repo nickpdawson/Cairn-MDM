@@ -21,30 +21,43 @@ sequences around them.
 
 ---
 
-## Stage 0 — quick wins (days, no design needed)
+## Stage 0 — quick wins ✅ DONE 2026-07-31 (commit 3c5423a)
 
-Low-risk hardening that shrinks the live exposure immediately. None of these
-touch device-facing behavior.
+Low-risk hardening that shrinks the live exposure immediately. None touch
+device-facing behavior. Built by a 4-agent team, integrated + verified.
 
-- **0.1 File modes** — enforce 0600 on `cairn.db`/`-wal`/`-shm`; set a
-  restrictive umask in the systemd unit; fail startup on unsafe
-  ownership/mode. (MDM-SEC-002)
-- **0.2 Session tokens hashed at rest** — store `sha256(token)`, compare on
-  lookup. (MDM-AUTH-001)
-- **0.3 HTTP hardening** — secure headers (HSTS/CSP baseline/X-Content-Type-
-  Options/Referrer-Policy/Permissions-Policy), `Cache-Control: no-store` on
-  auth/admin/enroll, full `http.Server` timeouts + `MaxHeaderBytes`,
-  `MaxBytesReader` on every form, Origin/Referer check on mutations. (MDM-WEB-001)
-- **0.4 Secrets off argv** — `admin add/passwd` and `init` read passwords from
-  TTY/stdin only; no-echo. (MDM-AUTH-001)
-- **0.5 Traceable build** — ldflags version/commit/date wired in release;
-  `/version` stops reporting dev/none/unknown. (MDM-REL-001 containment)
-- **0.6 LDAP transport** — refuse `ldap://` without StartTLS; require TLS verify.
-- **0.7 Repo hygiene** — add NOTICE, SECURITY.md; scrub the private IP from the
-  importer example DSN; fix STATUS/README inconsistencies.
+- **0.1 File modes** ✅ — `cairn.db`/`-wal`/`-shm` chmod 0600 on open + after
+  migrate (`internal/storage/sqlite/sqlite.go`); verified live (0600). Systemd
+  umask tightening applied at CT deploy. Startup-fail-on-unsafe deferred (chmod
+  self-heals; add later). (MDM-SEC-002)
+- **0.2 Session tokens hashed at rest** ✅ — SHA-256 before storage, raw token
+  only in cookie (`internal/auth/session.go`); test asserts stored ≠ raw.
+  (MDM-AUTH-001)
+- **0.3 HTTP hardening** ✅ — CSP baseline + X-Content-Type-Options +
+  Referrer-Policy + Permissions-Policy (HSTS only when TLS-local),
+  `Cache-Control: no-store` on admin/login/enroll, full `http.Server` +
+  ACME-server timeouts + `MaxHeaderBytes`, `MaxBytesReader` on all form POSTs,
+  same-origin check on mutations, `/readyz` no longer leaks errors. Headers
+  verified live. (MDM-WEB-001)
+- **0.4 Secrets off argv** ✅ — `admin add/passwd`/`init` no-echo TTY prompts;
+  scripted `-password` warns. (MDM-AUTH-001)
+- **0.5 Traceable build** ✅ — Makefile ldflags stamp real version/commit/date;
+  `cairn version` now shows `<commit>-dirty (...)` not dev/none/unknown.
+  (MDM-REL-001)
+- **0.6 LDAP transport** ✅ — config rejects plaintext `ldap://` without
+  start_tls; ServerName pinned for hostname verification.
+- **0.7 Repo hygiene** ✅ — NOTICE (nanomdm/scep MIT attribution) + SECURITY.md;
+  private IP scrubbed from importer example. NOTE: license is **MIT**
+  (consistent across LICENSE/README/STATUS/NOTICE) — the review's "Apache-2.0"
+  was a reviewer error, no change needed.
 
-**Containment (operational, now):** restrict `/enroll` to LAN/VPN at NPM until
-Stage 1.1 ships. Do not rely on URL secrecy.
+Verification: full `go test` + `-race` green, FreeBSD cross-compile clean,
+gofmt clean, secret-scan clean, live header/perms check passed, login still
+works.
+
+**Containment (operational, OPEN):** restrict `/enroll` to LAN/VPN at NPM until
+Stage 1.1 ships. Not yet done — deferred pending the iOS enrollment test; do not
+rely on URL secrecy. Owner decision.
 
 ## Stage 1 — enrollment + crypto trust (P0; before any internet exposure or public repo)
 
