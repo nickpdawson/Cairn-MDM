@@ -53,12 +53,16 @@ profiles (remote Wi-Fi removal can strand a device — removal is an explicit
 RemoveProfile command); failed installs are not auto-retried (re-upload
 re-arms them).
 
+## Phase 1 real-device gate ✅ PASSED 2026-07-31
+Production deployment (DZsec: PROD LXC, external SCEP → OpenXPKI, NPM+LE,
+real mdmcert.download APNs cert via the new `pushcert request/decrypt`
+wizard). MacBookPro17,1 on macOS **27.0 beta**: enrolled via `/enroll`,
+SCEP issuance from the external CA, ~1s APNs push round-trips, and a
+builder-made Kerberos SSO profile auto-pushed by the reconciler and
+Acknowledged. Two strict-client findings fixed: profile SCEP URLs must be
+https (ATS), and extensiblesso `Type` must be `Credential` (capitalized).
+
 ## Remaining
-- **Phase 1 real-device gate** ⏳ — needs Apple hardware + real APNs cert +
-  public TLS. Procedure: import the real push cert; run `cairn serve` behind
-  public TLS (or `tls.mode=acme` with public DNS); install the profile from
-  `GET /enroll` on a Mac/iPhone; confirm SCEP issuance + `/mdm` check-in + a
-  device row; `cairn enqueue -id <UDID> -type InstallProfile -profile p.mobileconfig`.
 - **Phase 2 polish (optional)** — DB-backed audit log (mutations currently get
   structured slog entries with user attribution), live SSE command results,
   "install/remove profile now" one-off actions from the device page.
