@@ -82,10 +82,15 @@ func (a *App) handleProfileDetail(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	deploys, err := a.deploys.ProfileDeploys(r.Context(), p.ID)
+	if err != nil {
+		a.log.Error("profile deploys", "id", p.ID, "err", err)
+	}
 	a.render(w, r, http.StatusOK, "profile.html", map[string]any{
 		"Title":   p.Name,
 		"Profile": p,
 		"Size":    len(p.Data),
+		"Deploys": deploys,
 		"Flash":   r.URL.Query().Get("flash"),
 		"Error":   r.URL.Query().Get("error"),
 	})

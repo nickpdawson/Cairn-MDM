@@ -27,6 +27,9 @@
               <div class="sub mono">{{.Identifier}}</div>
             </td>
             <td>{{range .Types}}<span class="tag">{{.}}</span> {{end}}</td>
+            <td class="sub">
+              {{with index $.DeployStatus .ID}}{{.Installed}} installed · {{.Pending}} pending · {{.Failed}} failed{{else}}—{{end}}
+            </td>
             {{if $admin}}
             <td style="text-align:right">
               <form method="post" action="/admin/groups/{{$gid}}/profiles">

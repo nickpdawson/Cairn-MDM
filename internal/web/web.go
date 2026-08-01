@@ -87,6 +87,14 @@ type AuditStore interface {
 	ListAudit(ctx context.Context, limit int) ([]sqlite.AuditEntry, error)
 }
 
+// DeployStore reads profile-deploy status: what group-assigned profiles have
+// been pushed where, and how the pushes landed. *sqlite.DB satisfies it.
+type DeployStore interface {
+	DeviceDeploys(ctx context.Context, deviceID string) ([]sqlite.DeviceDeploy, error)
+	ProfileDeploys(ctx context.Context, profileID int64) ([]sqlite.ProfileDeploy, error)
+	GroupDeployStatus(ctx context.Context, groupID int64) ([]sqlite.GroupProfileStatus, error)
+}
+
 // Store bundles everything the console reads and writes; *sqlite.DB implements
 // all of it.
 type Store interface {
@@ -97,6 +105,7 @@ type Store interface {
 	GroupStore
 	GrantStore
 	AuditStore
+	DeployStore
 }
 
 // Commander runs device actions from the console.
@@ -134,6 +143,7 @@ type App struct {
 	groups     GroupStore
 	grants     GrantStore
 	audit      AuditStore
+	deploys    DeployStore
 	cmd        Commander
 	rec        Reconciler // may be nil (no auto-push)
 	cfg        Config
@@ -149,7 +159,7 @@ func New(sessions *auth.SessionStore, authn Authenticator, store Store, cmd Comm
 	}
 	return &App{
 		sessions: sessions, auth: authn,
-		devices: store, settings: store, apnsTopics: store, profiles: store, groups: store, grants: store, audit: store,
+		devices: store, settings: store, apnsTopics: store, profiles: store, groups: store, grants: store, audit: store, deploys: store,
 		cmd: cmd, rec: rec, cfg: cfg, tmpl: tmpl, log: log,
 	}, nil
 }
@@ -172,6 +182,8 @@ func (a *App) Register(mux *http.ServeMux) {
 	mux.Handle("GET /admin/devices", a.requireRole(auth.RoleOperator, a.handleDevices))
 	mux.Handle("GET /admin/devices/{id}", a.requireRole(auth.RoleOperator, a.handleDeviceDetail))
 	mux.Handle("POST /admin/devices/{id}/refresh", a.audited(a.requireRole(auth.RoleOperator, a.handleDeviceRefresh)))
+	mux.Handle("POST /admin/devices/{id}/install", a.audited(a.requireRole(auth.RoleOperator, a.handleDeviceInstall)))
+	mux.Handle("POST /admin/devices/{id}/remove", a.audited(a.requireRole(auth.RoleOperator, a.handleDeviceRemove)))
 
 	// Profile library. Viewing/pushing is operator work; changing the library
 	// (upload/delete) is admin-only.

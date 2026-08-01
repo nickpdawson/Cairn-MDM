@@ -61,6 +61,14 @@ func (a *App) handleGroupDetail(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		a.log.Error("group profiles", "id", g.ID, "err", err)
 	}
+	deployStatus, err := a.deploys.GroupDeployStatus(ctx, g.ID)
+	if err != nil {
+		a.log.Error("group deploy status", "id", g.ID, "err", err)
+	}
+	statusByProfile := make(map[int64]sqlite.GroupProfileStatus, len(deployStatus))
+	for _, s := range deployStatus {
+		statusByProfile[s.ProfileID] = s
+	}
 
 	// Options for the add-device / assign-profile selects: everything not
 	// already in the group.
@@ -92,6 +100,7 @@ func (a *App) handleGroupDetail(w http.ResponseWriter, r *http.Request) {
 		"Group":           g,
 		"Members":         members,
 		"Assigned":        assigned,
+		"DeployStatus":    statusByProfile,
 		"AddableDevices":  addableDevices,
 		"AddableProfiles": addableProfiles,
 		"Flash":           r.URL.Query().Get("flash"),

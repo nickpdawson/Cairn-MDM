@@ -279,13 +279,79 @@ func (a *App) handleDeviceDetail(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		a.log.Error("device groups", "id", d.ID, "err", err)
 	}
+	deploys, err := a.deploys.DeviceDeploys(r.Context(), d.ID)
+	if err != nil {
+		a.log.Error("device deploys", "id", d.ID, "err", err)
+	}
+	library, err := a.profiles.ListProfiles(r.Context())
+	if err != nil {
+		a.log.Error("list profiles", "err", err)
+	}
 	a.render(w, r, http.StatusOK, "device.html", map[string]any{
 		"Title":    d.DisplayName(),
 		"Device":   d,
 		"Commands": commands,
 		"Groups":   groups,
+		"Deploys":  deploys,
+		"Library":  library,
 		"Flash":    r.URL.Query().Get("flash"),
 	})
+}
+
+// handleDeviceInstall pushes a library profile to one device as a one-off
+// InstallProfile command (operator+, CSRF-checked). It records nothing in
+// profile_deploys — that table tracks group-assigned pushes; ad-hoc installs
+// show up in the command history.
+func (a *App) handleDeviceInstall(w http.ResponseWriter, r *http.Request) {
+	limitForm(w, r)
+	if !a.checkCSRF(r) {
+		http.Error(w, "invalid CSRF token", http.StatusForbidden)
+		return
+	}
+	id := r.PathValue("id")
+	back := "/admin/devices/" + id
+	pid, err := strconv.ParseInt(r.PostFormValue("profile_id"), 10, 64)
+	if err != nil {
+		http.Redirect(w, r, back+"?flash="+url.QueryEscape("Choose a profile to install."), http.StatusSeeOther)
+		return
+	}
+	prof, err := a.profiles.GetProfile(r.Context(), pid)
+	if err != nil {
+		http.Redirect(w, r, back+"?flash="+url.QueryEscape("No such profile."), http.StatusSeeOther)
+		return
+	}
+	if err := a.cmd.SendInstallProfile(r.Context(), prof.Data, id); err != nil {
+		a.log.Error("send install profile", "id", id, "profile", pid, "err", err)
+		http.Redirect(w, r, back+"?flash="+url.QueryEscape("Failed to queue install."), http.StatusSeeOther)
+		return
+	}
+	a.log.Info("install profile queued", "id", id, "profile", pid, "user", sessionFrom(r).Identity.Username)
+	http.Redirect(w, r, back+"?flash="+url.QueryEscape("Install queued."), http.StatusSeeOther)
+}
+
+// handleDeviceRemove sends an explicit RemoveProfile for a profile identifier
+// (operator+, CSRF-checked). Removal is always an explicit command — never
+// implied by group changes.
+func (a *App) handleDeviceRemove(w http.ResponseWriter, r *http.Request) {
+	limitForm(w, r)
+	if !a.checkCSRF(r) {
+		http.Error(w, "invalid CSRF token", http.StatusForbidden)
+		return
+	}
+	id := r.PathValue("id")
+	back := "/admin/devices/" + id
+	identifier := strings.TrimSpace(r.PostFormValue("identifier"))
+	if identifier == "" {
+		http.Redirect(w, r, back+"?flash="+url.QueryEscape("No profile identifier given."), http.StatusSeeOther)
+		return
+	}
+	if err := a.cmd.SendRemoveProfile(r.Context(), identifier, id); err != nil {
+		a.log.Error("send remove profile", "id", id, "identifier", identifier, "err", err)
+		http.Redirect(w, r, back+"?flash="+url.QueryEscape("Failed to queue removal."), http.StatusSeeOther)
+		return
+	}
+	a.log.Info("remove profile queued", "id", id, "identifier", identifier, "user", sessionFrom(r).Identity.Username)
+	http.Redirect(w, r, back+"?flash="+url.QueryEscape("Remove queued."), http.StatusSeeOther)
 }
 
 func (a *App) handleDeviceRefresh(w http.ResponseWriter, r *http.Request) {

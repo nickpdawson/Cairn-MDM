@@ -25,6 +25,31 @@
       </table>
     </div>
 
+    <h2>Deployed to</h2>
+    <div class="card">
+      {{if .Deploys}}
+      <table>
+        <thead>
+          <tr><th>Device</th><th>Status</th><th>Updated</th></tr>
+        </thead>
+        <tbody>
+          {{range .Deploys}}
+          <tr>
+            <td><a href="/admin/devices/{{.DeviceID}}">{{.DeviceName}}</a></td>
+            <td>
+              <span class="dot {{if eq .Status "installed"}}on{{else if eq .Status "failed"}}off{{else}}wait{{end}}"></span>
+              {{.Status}}
+            </td>
+            <td class="sub">{{.UpdatedAt}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <div class="empty">Not deployed to any device yet.</div>
+      {{end}}
+    </div>
+
     <h2>Actions</h2>
     <p>
       <a class="btn" href="/admin/profiles/{{.Profile.ID}}/download">Download</a>

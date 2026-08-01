@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -218,6 +219,66 @@ func TestDevicesSearchFilters(t *testing.T) {
 		t.Error("devices search body included a non-matching device")
 	}
 }
+
+func TestDeviceInstallProfileAndDeployStatus(t *testing.T) {
+	app, sessions, db := testApp(t)
+	m := mux(app)
+	cookie, csrf := adminSession(t, sessions)
+	ctx := context.Background()
+
+	if err := db.DeviceEnrolled(ctx, mdmcore.DeviceRecord{
+		ID: "UDID-RIDGE", UDID: "UDID-RIDGE", Serial: "C02RIDGE", Name: "Ridge MBP", Model: "MacBookPro18,2",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	pid, err := db.SaveProfile(ctx, sqlite.Profile{
+		Identifier: "com.example.wifi", UUID: "u-1", Name: "Corp Wi-Fi",
+		PayloadTypes: "com.apple.wifi.managed", Source: "upload", Data: []byte("v1"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// POST install: library profile pushed to the device → redirect + flash.
+	form := strings.NewReader("csrf=" + csrf + "&profile_id=" + itoa64(pid))
+	req := httptest.NewRequest(http.MethodPost, "/admin/devices/UDID-RIDGE/install", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	m.ServeHTTP(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("install = %d, want 303", rr.Code)
+	}
+	if loc := rr.Header().Get("Location"); !strings.Contains(loc, "flash=Install") {
+		t.Fatalf("install redirect = %q, want an Install-queued flash", loc)
+	}
+
+	// Seed a deploy row so the device page shows the deployed profile.
+	if _, err := db.SQL().ExecContext(ctx,
+		`INSERT INTO profile_deploys (device_id, profile_id, command_uuid, profile_updated_at, status, updated_at)
+		 VALUES ('UDID-RIDGE', ?, 'cmd-1', 'v1', 'installed', datetime('now'))`, pid); err != nil {
+		t.Fatal(err)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/admin/devices/UDID-RIDGE", nil)
+	req.AddCookie(cookie)
+	rr = httptest.NewRecorder()
+	m.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("device detail = %d, want 200", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "Corp Wi-Fi") {
+		t.Error("device page missing the deployed profile name")
+	}
+	if !strings.Contains(body, "installed") {
+		t.Error("device page missing the deploy status")
+	}
+}
+
+// itoa64 formats an int64 for form bodies without pulling strconv into the test
+// preamble more than once.
+func itoa64(n int64) string { return strconv.FormatInt(n, 10) }
 
 func TestLoginRejectsBadPassword(t *testing.T) {
 	app, _, _ := testApp(t)

@@ -39,6 +39,52 @@
       <button class="btn" type="submit">Refresh device info</button>
     </form>
 
+    <h2>Profiles</h2>
+    <div class="card">
+      {{if .Deploys}}
+      <table>
+        <thead>
+          <tr><th>Profile</th><th>Status</th><th>Updated</th><th></th></tr>
+        </thead>
+        <tbody>
+          {{range .Deploys}}
+          <tr>
+            <td>
+              {{.ProfileName}}
+              <div class="sub mono">{{.ProfileIdentifier}}</div>
+            </td>
+            <td>
+              <span class="dot {{if eq .Status "installed"}}on{{else if eq .Status "failed"}}off{{else}}wait{{end}}"></span>
+              {{.Status}}
+            </td>
+            <td class="sub">{{.UpdatedAt}}</td>
+            <td style="text-align:right">
+              <form method="post" action="/admin/devices/{{$.Device.ID}}/remove"
+                    onsubmit="return confirm('Send a RemoveProfile command for this profile?')">
+                <input type="hidden" name="csrf" value="{{$.CSRF}}">
+                <input type="hidden" name="identifier" value="{{.ProfileIdentifier}}">
+                <button class="btn link" type="submit">Remove</button>
+              </form>
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <div class="empty">No group-assigned profiles deployed to this device.</div>
+      {{end}}
+    </div>
+    {{if .Library}}
+    <form method="post" action="/admin/devices/{{.Device.ID}}/install" style="margin-top:12px">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <select name="profile_id" required>
+        <option value="" disabled selected>Install a profile…</option>
+        {{range .Library}}<option value="{{.ID}}">{{.Name}} ({{.Identifier}})</option>{{end}}
+      </select>
+      <button class="btn" type="submit">Install</button>
+    </form>
+    {{end}}
+
     <h2>Command history</h2>
     <div class="card">
       {{if .Commands}}
