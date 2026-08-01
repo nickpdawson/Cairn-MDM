@@ -9,18 +9,30 @@ import (
 
 // Device is a row of the admin device inventory.
 type Device struct {
-	ID             string
-	UDID           string
-	Serial         string
-	Name           string
-	Model          string
-	Product        string
-	OSVersion      string
-	BuildVersion   string
-	EnrolledAt     sql.NullString
-	LastSeen       sql.NullString
-	TokenUpdatedAt sql.NullString
-	CheckedOutAt   sql.NullString
+	ID                string
+	UDID              string
+	Serial            string
+	Name              string
+	Model             string
+	Product           string
+	OSVersion         string
+	BuildVersion      string
+	AvailableCapacity string
+	Battery           string
+	EnrolledAt        sql.NullString
+	LastSeen          sql.NullString
+	TokenUpdatedAt    sql.NullString
+	InventoryAt       sql.NullString
+	CheckedOutAt      sql.NullString
+}
+
+// InventoryObserved is the timestamp of the last DeviceInformation response, or
+// "" if the device has never returned one.
+func (d Device) InventoryObserved() string {
+	if d.InventoryAt.Valid {
+		return d.InventoryAt.String
+	}
+	return ""
 }
 
 // DisplayName is the device name if known, else the serial, else the ID.
@@ -83,11 +95,41 @@ func (db *DB) DeviceCheckedIn(ctx context.Context, id string) error {
 	return err
 }
 
+// DeviceInventory projects a DeviceInformation response's QueryResponses onto
+// the row, stamping inventory_at. Each column is overwritten only when the
+// incoming value is non-empty (same CASE-WHEN guard as DeviceEnrolled), so a
+// partial query response never blanks a previously observed value.
+func (db *DB) DeviceInventory(ctx context.Context, id string, inv mdmcore.DeviceInventory) error {
+	_, err := db.sql.ExecContext(ctx,
+		`UPDATE devices SET
+		   name               = CASE WHEN ? <> '' THEN ? ELSE name END,
+		   model              = CASE WHEN ? <> '' THEN ? ELSE model END,
+		   product            = CASE WHEN ? <> '' THEN ? ELSE product END,
+		   os_version         = CASE WHEN ? <> '' THEN ? ELSE os_version END,
+		   build_version      = CASE WHEN ? <> '' THEN ? ELSE build_version END,
+		   serial             = CASE WHEN ? <> '' THEN ? ELSE serial END,
+		   available_capacity = CASE WHEN ? <> '' THEN ? ELSE available_capacity END,
+		   battery            = CASE WHEN ? <> '' THEN ? ELSE battery END,
+		   inventory_at       = datetime('now')
+		 WHERE id = ?`,
+		inv.Name, inv.Name,
+		inv.Model, inv.Model,
+		inv.Product, inv.Product,
+		inv.OSVersion, inv.OSVersion,
+		inv.BuildVersion, inv.BuildVersion,
+		inv.Serial, inv.Serial,
+		inv.AvailableCapacity, inv.AvailableCapacity,
+		inv.Battery, inv.Battery,
+		id)
+	return err
+}
+
 // ListDevices returns the inventory ordered by most-recently-seen.
 func (db *DB) ListDevices(ctx context.Context) ([]Device, error) {
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT id, udid, serial, name, model, product, os_version, build_version,
-		        enrolled_at, last_seen, token_updated_at, checked_out_at
+		        available_capacity, battery,
+		        enrolled_at, last_seen, token_updated_at, inventory_at, checked_out_at
 		 FROM devices
 		 ORDER BY last_seen DESC`)
 	if err != nil {
@@ -99,7 +141,8 @@ func (db *DB) ListDevices(ctx context.Context) ([]Device, error) {
 	for rows.Next() {
 		var d Device
 		if err := rows.Scan(&d.ID, &d.UDID, &d.Serial, &d.Name, &d.Model, &d.Product,
-			&d.OSVersion, &d.BuildVersion, &d.EnrolledAt, &d.LastSeen, &d.TokenUpdatedAt, &d.CheckedOutAt); err != nil {
+			&d.OSVersion, &d.BuildVersion, &d.AvailableCapacity, &d.Battery,
+			&d.EnrolledAt, &d.LastSeen, &d.TokenUpdatedAt, &d.InventoryAt, &d.CheckedOutAt); err != nil {
 			return nil, err
 		}
 		out = append(out, d)
@@ -112,10 +155,12 @@ func (db *DB) GetDevice(ctx context.Context, id string) (Device, error) {
 	var d Device
 	err := db.sql.QueryRowContext(ctx,
 		`SELECT id, udid, serial, name, model, product, os_version, build_version,
-		        enrolled_at, last_seen, token_updated_at, checked_out_at
+		        available_capacity, battery,
+		        enrolled_at, last_seen, token_updated_at, inventory_at, checked_out_at
 		 FROM devices WHERE id = ?`, id).
 		Scan(&d.ID, &d.UDID, &d.Serial, &d.Name, &d.Model, &d.Product,
-			&d.OSVersion, &d.BuildVersion, &d.EnrolledAt, &d.LastSeen, &d.TokenUpdatedAt, &d.CheckedOutAt)
+			&d.OSVersion, &d.BuildVersion, &d.AvailableCapacity, &d.Battery,
+			&d.EnrolledAt, &d.LastSeen, &d.TokenUpdatedAt, &d.InventoryAt, &d.CheckedOutAt)
 	return d, err
 }
 

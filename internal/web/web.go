@@ -80,6 +80,13 @@ type GrantStore interface {
 	RevokeGrant(ctx context.Context, id int64) error
 }
 
+// AuditStore records and reads the append-only audit log of security-sensitive
+// admin actions. *sqlite.DB satisfies it.
+type AuditStore interface {
+	AppendAudit(ctx context.Context, e sqlite.AuditEntry) error
+	ListAudit(ctx context.Context, limit int) ([]sqlite.AuditEntry, error)
+}
+
 // Store bundles everything the console reads and writes; *sqlite.DB implements
 // all of it.
 type Store interface {
@@ -89,6 +96,7 @@ type Store interface {
 	ProfileStore
 	GroupStore
 	GrantStore
+	AuditStore
 }
 
 // Commander runs device actions from the console.
@@ -125,6 +133,7 @@ type App struct {
 	profiles   ProfileStore
 	groups     GroupStore
 	grants     GrantStore
+	audit      AuditStore
 	cmd        Commander
 	rec        Reconciler // may be nil (no auto-push)
 	cfg        Config
@@ -140,7 +149,7 @@ func New(sessions *auth.SessionStore, authn Authenticator, store Store, cmd Comm
 	}
 	return &App{
 		sessions: sessions, auth: authn,
-		devices: store, settings: store, apnsTopics: store, profiles: store, groups: store, grants: store,
+		devices: store, settings: store, apnsTopics: store, profiles: store, groups: store, grants: store, audit: store,
 		cmd: cmd, rec: rec, cfg: cfg, tmpl: tmpl, log: log,
 	}, nil
 }
@@ -151,44 +160,46 @@ func (a *App) Register(mux *http.ServeMux) {
 	// Static assets.
 	mux.Handle("GET /assets/", http.FileServerFS(files))
 
-	// Public auth routes.
+	// Public auth routes. The mutating ones (POST /login, POST /logout) are
+	// wrapped with a.audited so every sign-in/sign-out is recorded.
 	mux.HandleFunc("GET /login", a.handleLoginForm)
-	mux.HandleFunc("POST /login", a.handleLogin)
-	mux.HandleFunc("POST /logout", a.handleLogout)
+	mux.Handle("POST /login", a.audited(http.HandlerFunc(a.handleLogin)))
+	mux.Handle("POST /logout", a.audited(http.HandlerFunc(a.handleLogout)))
 
 	// Authenticated console (operator or higher).
 	mux.Handle("GET /admin", a.requireRole(auth.RoleOperator, a.handleDashboard))
+	mux.Handle("GET /admin/activity", a.requireRole(auth.RoleOperator, a.handleActivity))
 	mux.Handle("GET /admin/devices", a.requireRole(auth.RoleOperator, a.handleDevices))
 	mux.Handle("GET /admin/devices/{id}", a.requireRole(auth.RoleOperator, a.handleDeviceDetail))
-	mux.Handle("POST /admin/devices/{id}/refresh", a.requireRole(auth.RoleOperator, a.handleDeviceRefresh))
+	mux.Handle("POST /admin/devices/{id}/refresh", a.audited(a.requireRole(auth.RoleOperator, a.handleDeviceRefresh)))
 
 	// Profile library. Viewing/pushing is operator work; changing the library
 	// (upload/delete) is admin-only.
 	mux.Handle("GET /admin/profiles", a.requireRole(auth.RoleOperator, a.handleProfiles))
-	mux.Handle("POST /admin/profiles/upload", a.requireRole(auth.RoleAdmin, a.handleProfileUpload))
+	mux.Handle("POST /admin/profiles/upload", a.audited(a.requireRole(auth.RoleAdmin, a.handleProfileUpload)))
 	mux.Handle("GET /admin/profiles/{id}", a.requireRole(auth.RoleOperator, a.handleProfileDetail))
 	mux.Handle("GET /admin/profiles/{id}/download", a.requireRole(auth.RoleOperator, a.handleProfileDownload))
-	mux.Handle("POST /admin/profiles/{id}/delete", a.requireRole(auth.RoleAdmin, a.handleProfileDelete))
+	mux.Handle("POST /admin/profiles/{id}/delete", a.audited(a.requireRole(auth.RoleAdmin, a.handleProfileDelete)))
 
 	// Profile builders (typed payloads generated into the library).
 	mux.Handle("GET /admin/profiles/new/wifi", a.requireRole(auth.RoleAdmin, a.handleBuilderWiFiForm))
-	mux.Handle("POST /admin/profiles/new/wifi", a.requireRole(auth.RoleAdmin, a.handleBuilderWiFi))
+	mux.Handle("POST /admin/profiles/new/wifi", a.audited(a.requireRole(auth.RoleAdmin, a.handleBuilderWiFi)))
 	mux.Handle("GET /admin/profiles/new/sso", a.requireRole(auth.RoleAdmin, a.handleBuilderSSOForm))
-	mux.Handle("POST /admin/profiles/new/sso", a.requireRole(auth.RoleAdmin, a.handleBuilderSSO))
+	mux.Handle("POST /admin/profiles/new/sso", a.audited(a.requireRole(auth.RoleAdmin, a.handleBuilderSSO)))
 
 	// Groups + assignments. Membership/assignment changes trigger the
 	// reconciler, which pushes profiles — admin-only, like the library.
 	// Enrollment grants — operators create/revoke single-use enroll links.
 	mux.Handle("GET /admin/enrollment", a.requireRole(auth.RoleOperator, a.handleEnrollment))
-	mux.Handle("POST /admin/enrollment", a.requireRole(auth.RoleOperator, a.handleGrantCreate))
-	mux.Handle("POST /admin/enrollment/{id}/revoke", a.requireRole(auth.RoleOperator, a.handleGrantRevoke))
+	mux.Handle("POST /admin/enrollment", a.audited(a.requireRole(auth.RoleOperator, a.handleGrantCreate)))
+	mux.Handle("POST /admin/enrollment/{id}/revoke", a.audited(a.requireRole(auth.RoleOperator, a.handleGrantRevoke)))
 
 	mux.Handle("GET /admin/groups", a.requireRole(auth.RoleOperator, a.handleGroups))
-	mux.Handle("POST /admin/groups", a.requireRole(auth.RoleAdmin, a.handleGroupCreate))
+	mux.Handle("POST /admin/groups", a.audited(a.requireRole(auth.RoleAdmin, a.handleGroupCreate)))
 	mux.Handle("GET /admin/groups/{id}", a.requireRole(auth.RoleOperator, a.handleGroupDetail))
-	mux.Handle("POST /admin/groups/{id}/delete", a.requireRole(auth.RoleAdmin, a.handleGroupDelete))
-	mux.Handle("POST /admin/groups/{id}/devices", a.requireRole(auth.RoleAdmin, a.handleGroupDeviceChange))
-	mux.Handle("POST /admin/groups/{id}/profiles", a.requireRole(auth.RoleAdmin, a.handleGroupProfileChange))
+	mux.Handle("POST /admin/groups/{id}/delete", a.audited(a.requireRole(auth.RoleAdmin, a.handleGroupDelete)))
+	mux.Handle("POST /admin/groups/{id}/devices", a.audited(a.requireRole(auth.RoleAdmin, a.handleGroupDeviceChange)))
+	mux.Handle("POST /admin/groups/{id}/profiles", a.audited(a.requireRole(auth.RoleAdmin, a.handleGroupProfileChange)))
 
 	// Bare "/" redirects to the console.
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {

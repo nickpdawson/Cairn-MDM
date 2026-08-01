@@ -99,6 +99,59 @@ func TestDeviceProjectionLifecycle(t *testing.T) {
 		t.Errorf("counts total=%d active=%d, want 1/1", total, active)
 	}
 
+	// DeviceInformation result — QueryResponses projected onto the inventory.
+	rawInfo := []byte(`<?xml version="1.0"?><plist version="1.0"><dict>
+	  <key>Status</key><string>Acknowledged</string>
+	  <key>CommandUUID</key><string>CMD-INFO</string>
+	  <key>QueryResponses</key><dict>
+	    <key>DeviceName</key><string>Ridge Pro</string>
+	    <key>Model</key><string>Mac14,7</string>
+	    <key>ProductName</key><string>Mac14,7</string>
+	    <key>OSVersion</key><string>15.6</string>
+	    <key>BuildVersion</key><string>24G84</string>
+	    <key>SerialNumber</key><string>C02XYZ</string>
+	    <key>AvailableDeviceCapacity</key><real>123.45</real>
+	    <key>BatteryLevel</key><real>0.87</real>
+	  </dict>
+	</dict></plist>`)
+	if _, err := svc.CommandAndReportResults(req("UDID-1"), &mdm.CommandResults{
+		Enrollment: mdm.Enrollment{UDID: "UDID-1"}, CommandUUID: "CMD-INFO", Status: "Acknowledged", Raw: rawInfo,
+	}); err != nil {
+		t.Fatalf("command results (info): %v", err)
+	}
+	d, err = db.GetDevice(ctx, "UDID-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Name != "Ridge Pro" || d.OSVersion != "15.6" || d.BuildVersion != "24G84" {
+		t.Errorf("inventory not projected from QueryResponses: %+v", d)
+	}
+	if d.AvailableCapacity != "123.45" || d.Battery != "0.87" {
+		t.Errorf("numeric query values not projected: capacity=%q battery=%q", d.AvailableCapacity, d.Battery)
+	}
+	if !d.InventoryAt.Valid {
+		t.Error("inventory_at should be set after a DeviceInformation result")
+	}
+
+	// A result with no QueryResponses (an ordinary acknowledgement) must not
+	// clobber the inventory columns.
+	rawAck := []byte(`<?xml version="1.0"?><plist version="1.0"><dict>
+	  <key>Status</key><string>Acknowledged</string>
+	  <key>CommandUUID</key><string>CMD-ACK</string>
+	</dict></plist>`)
+	if _, err := svc.CommandAndReportResults(req("UDID-1"), &mdm.CommandResults{
+		Enrollment: mdm.Enrollment{UDID: "UDID-1"}, CommandUUID: "CMD-ACK", Status: "Acknowledged", Raw: rawAck,
+	}); err != nil {
+		t.Fatalf("command results (ack): %v", err)
+	}
+	d, err = db.GetDevice(ctx, "UDID-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Name != "Ridge Pro" || d.OSVersion != "15.6" || d.AvailableCapacity != "123.45" || d.Battery != "0.87" {
+		t.Errorf("non-DeviceInformation result clobbered inventory: %+v", d)
+	}
+
 	// CheckOut — no longer enrolled.
 	if err := svc.CheckOut(req("UDID-1"), &mdm.CheckOut{Enrollment: mdm.Enrollment{UDID: "UDID-1"}}); err != nil {
 		t.Fatal(err)

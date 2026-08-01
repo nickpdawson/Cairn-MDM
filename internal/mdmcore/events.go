@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 
 	"github.com/micromdm/nanomdm/mdm"
 	"github.com/micromdm/nanomdm/service"
@@ -25,6 +26,22 @@ type DeviceRecord struct {
 	Topic        string
 }
 
+// DeviceInventory is the projection of a DeviceInformation command's
+// QueryResponses. Unlike DeviceRecord (captured at Authenticate), this is the
+// fresh inventory the console's "Refresh device info" button asks for. Empty
+// fields mean the device did not return that query and must not overwrite a
+// previously observed value.
+type DeviceInventory struct {
+	Name              string
+	Model             string
+	Product           string
+	OSVersion         string
+	BuildVersion      string
+	Serial            string
+	AvailableCapacity string // AvailableDeviceCapacity, formatted
+	Battery           string // BatteryLevel, formatted
+}
+
 // DeviceProjector persists device-inventory changes derived from check-ins.
 // The SQLite storage implements it. This replaces v1's 30-second polling loop:
 // enrollment and token-update events update the inventory the moment they happen.
@@ -33,6 +50,10 @@ type DeviceProjector interface {
 	DeviceTokenUpdated(ctx context.Context, id string) error
 	DeviceCheckedOut(ctx context.Context, id string) error
 	DeviceCheckedIn(ctx context.Context, id string) error
+	// DeviceInventory projects a DeviceInformation response's QueryResponses,
+	// overwriting only the columns whose incoming value is non-empty and
+	// stamping inventory_at.
+	DeviceInventory(ctx context.Context, id string, inv DeviceInventory) error
 }
 
 // EventService decorates a NanoMDM service: it delegates every call to the inner
@@ -123,8 +144,71 @@ func (s *EventService) CommandAndReportResults(r *mdm.Request, m *mdm.CommandRes
 				s.log.Warn("command history (result) failed", "id", r.ID, "uuid", m.CommandUUID, "err", rerr)
 			}
 		}
+		// If this result carried a DeviceInformation response, project its
+		// QueryResponses onto the inventory (MDM-INV-001). inventoryFromRaw
+		// returns ok=false for any result that isn't one, so ordinary
+		// acknowledgements never touch the inventory columns.
+		if s.proj != nil {
+			if inv, ok := inventoryFromRaw(m.Raw); ok {
+				if perr := s.proj.DeviceInventory(r.Context(), r.ID, inv); perr != nil {
+					s.log.Warn("device projection (inventory) failed", "id", r.ID, "err", perr)
+				}
+			}
+		}
 	}
 	return cmd, err
+}
+
+// inventoryFromRaw extracts a DeviceInventory from a command result plist. It
+// reports ok=false unless the result carries a top-level QueryResponses dict
+// (i.e. it is a DeviceInformation response), so unrelated acknowledgements never
+// clobber inventory.
+func inventoryFromRaw(raw []byte) (DeviceInventory, bool) {
+	if len(raw) == 0 {
+		return DeviceInventory{}, false
+	}
+	var top map[string]any
+	if err := plist.Unmarshal(raw, &top); err != nil {
+		return DeviceInventory{}, false
+	}
+	qr, ok := top["QueryResponses"].(map[string]any)
+	if !ok {
+		return DeviceInventory{}, false
+	}
+	str := func(k string) string {
+		if v, ok := qr[k].(string); ok {
+			return v
+		}
+		return ""
+	}
+	inv := DeviceInventory{
+		Name:              str("DeviceName"),
+		Model:             str("Model"),
+		Product:           str("ProductName"),
+		OSVersion:         str("OSVersion"),
+		BuildVersion:      str("BuildVersion"),
+		Serial:            str("SerialNumber"),
+		AvailableCapacity: numStr(qr["AvailableDeviceCapacity"]),
+		Battery:           numStr(qr["BatteryLevel"]),
+	}
+	return inv, true
+}
+
+// numStr formats a plist numeric (float64/int64) query value as a string,
+// returning "" for absent or non-numeric values so it is treated as "no update".
+func numStr(v any) string {
+	switch n := v.(type) {
+	case float64:
+		return strconv.FormatFloat(n, 'g', -1, 64)
+	case int64:
+		return strconv.FormatInt(n, 10)
+	case int:
+		return strconv.Itoa(n)
+	case string:
+		return n
+	default:
+		return ""
+	}
 }
 
 // firstError summarizes an ErrorChain for the history row.

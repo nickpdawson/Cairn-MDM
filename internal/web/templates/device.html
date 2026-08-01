@@ -20,8 +20,11 @@
           <tr><th>Serial</th><td class="mono">{{if .Device.Serial}}{{.Device.Serial}}{{else}}—{{end}}</td></tr>
           <tr><th>Model</th><td>{{if .Device.Model}}{{.Device.Model}}{{else}}—{{end}}</td></tr>
           <tr><th>OS</th><td>{{.Device.Product}} {{.Device.OSVersion}} {{if .Device.BuildVersion}}({{.Device.BuildVersion}}){{end}}</td></tr>
+          <tr><th>Available capacity</th><td>{{if .Device.AvailableCapacity}}{{.Device.AvailableCapacity}}{{else}}—{{end}}</td></tr>
+          <tr><th>Battery</th><td>{{if .Device.Battery}}{{.Device.Battery}}{{else}}—{{end}}</td></tr>
           <tr><th>Enrolled</th><td class="sub">{{nullStr .Device.EnrolledAt}}</td></tr>
           <tr><th>Last seen</th><td class="sub">{{nullStr .Device.LastSeen}}</td></tr>
+          <tr><th>Last inventory</th><td class="sub">{{nullStr .Device.InventoryAt}}</td></tr>
           <tr><th>Token updated</th><td class="sub">{{nullStr .Device.TokenUpdatedAt}}</td></tr>
           <tr><th>Groups</th><td>
             {{if .Groups}}{{range .Groups}}<a class="tag" href="/admin/groups/{{.ID}}">{{.Name}}</a> {{end}}{{else}}—{{end}}

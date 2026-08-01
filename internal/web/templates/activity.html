@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>{{template "head" .}}</head>
+<body>
+  {{template "topbar" .}}
+  <main>
+    <h1>Activity</h1>
+    <p class="sub">Append-only audit log of security-sensitive admin actions. Newest first.</p>
+
+    <div class="card">
+      {{if .Entries}}
+      <table>
+        <thead>
+          <tr><th>Time (UTC)</th><th>User</th><th>Action</th><th>Target</th><th>Result</th><th>Remote</th></tr>
+        </thead>
+        <tbody>
+          {{range .Entries}}
+          <tr>
+            <td class="sub">{{.At}}</td>
+            <td>
+              {{if .Username}}{{.Username}}{{else}}<span class="sub">—</span>{{end}}
+              {{if .Provider}}<div class="sub">{{.Provider}}</div>{{end}}
+            </td>
+            <td>{{.Action}}</td>
+            <td>{{.Target}}</td>
+            <td>{{.Result}}</td>
+            <td class="sub">{{.Remote}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <div class="empty">No activity recorded yet. Security-sensitive actions (sign-in, profile and group changes, enrollment grants) appear here as they happen.</div>
+      {{end}}
+    </div>
+  </main>
+</body>
+</html>
