@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
+	"strings"
 
 	_ "github.com/go-sql-driver/mysql" // pure-Go MySQL driver, import side only
 )
@@ -17,12 +19,52 @@ type MySQLSource struct {
 
 // OpenMySQL connects to the source. DSN format is go-sql-driver's, e.g.
 // "nanomdm:pass@tcp(db.example.internal:3306)/nanomdm".
+//
+// The account behind this DSN should be a READ-ONLY MySQL user: the importer
+// never writes to the source (that is what makes rollback trivial), so a
+// SELECT-only grant both matches intent and limits blast radius.
+//
+// Transport security: if the DSN does not set a tls= parameter, OpenMySQL
+// appends tls=preferred so a TLS-capable server is used over TLS while a
+// plaintext localhost/socket migration still works. When TLS is not set at all
+// (e.g. tls=false or a unix() socket) a warning is logged rather than failing —
+// some localhost/socket migrations are legitimately non-TLS.
 func OpenMySQL(dsn string) (*MySQLSource, error) {
+	if !dsnHasTLS(dsn) {
+		slog.Default().Warn("importer: source DSN has no tls= parameter; defaulting to tls=preferred (use tls=true for a remote source, and a read-only MySQL account)")
+		dsn = appendDSNParam(dsn, "tls", "preferred")
+	}
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open mysql: %w", err)
 	}
 	return &MySQLSource{db: db}, nil
+}
+
+// dsnHasTLS reports whether the DSN's parameter list already sets tls=.
+func dsnHasTLS(dsn string) bool {
+	q := dsn
+	if i := strings.LastIndex(dsn, "?"); i >= 0 {
+		q = dsn[i+1:]
+	} else {
+		return false
+	}
+	for _, kv := range strings.Split(q, "&") {
+		if strings.HasPrefix(strings.ToLower(kv), "tls=") {
+			return true
+		}
+	}
+	return false
+}
+
+// appendDSNParam adds key=val to the DSN's query string, adding the "?" if the
+// DSN has no parameter section yet.
+func appendDSNParam(dsn, key, val string) string {
+	sep := "&"
+	if !strings.Contains(dsn, "?") {
+		sep = "?"
+	}
+	return dsn + sep + key + "=" + val
 }
 
 // Ping verifies connectivity.
@@ -71,7 +113,7 @@ func (s *MySQLSource) Users(ctx context.Context) ([]UserRow, error) {
 
 func (s *MySQLSource) Enrollments(ctx context.Context) ([]EnrollmentRow, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, device_id, type, topic, push_magic, token_hex, enabled FROM enrollments ORDER BY id`)
+		`SELECT id, device_id, COALESCE(user_id, ''), type, topic, push_magic, token_hex, enabled FROM enrollments ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +121,7 @@ func (s *MySQLSource) Enrollments(ctx context.Context) ([]EnrollmentRow, error) 
 	var out []EnrollmentRow
 	for rows.Next() {
 		var e EnrollmentRow
-		if err := rows.Scan(&e.ID, &e.DeviceID, &e.Type, &e.Topic, &e.PushMagic, &e.TokenHex, &e.Enabled); err != nil {
+		if err := rows.Scan(&e.ID, &e.DeviceID, &e.UserID, &e.Type, &e.Topic, &e.PushMagic, &e.TokenHex, &e.Enabled); err != nil {
 			return nil, err
 		}
 		out = append(out, e)

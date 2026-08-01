@@ -62,11 +62,19 @@ type UserRow struct {
 type EnrollmentRow struct {
 	ID        string
 	DeviceID  string
-	Type      string
+	UserID    string // non-empty for user-channel enrollments
+	Type      string // "Device" or "User"
 	Topic     string
 	PushMagic string
 	TokenHex  string
 	Enabled   bool
+}
+
+// isUserChannel reports whether an enrollment row addresses the user channel
+// (and therefore must be disabled with a user-shaped request carrying the
+// parent device ID).
+func (e EnrollmentRow) isUserChannel() bool {
+	return e.Type == "User" || e.UserID != ""
 }
 
 // CertAuthRow binds an enrollment ID to its identity-certificate SHA-256.
@@ -89,9 +97,35 @@ type Options struct {
 	AllowPending bool
 	// DryRun reads and validates everything but writes nothing.
 	DryRun bool
+	// AllowedExceptions is the set of enrollment/device IDs the operator has
+	// explicitly accepted skipping (from -allow-exceptions). A skip whose ID is
+	// present here does NOT fail the run; any other skip does.
+	AllowedExceptions map[string]bool
+	// ExceptionFileSHA256 is the hex sha256 of the exception file, recorded in
+	// the evidence bundle for audit. Empty when no exception file was supplied.
+	ExceptionFileSHA256 string
 }
 
-// Report is the outcome. Mismatches must be empty for a trustworthy cutover.
+// SkipEntry is one enrollment/device the importer could not migrate, with the
+// reason and whether the operator explicitly accepted the skip.
+type SkipEntry struct {
+	ID       string `json:"id"`
+	Reason   string `json:"reason"`
+	Accepted bool   `json:"accepted"` // matched an -allow-exceptions ID
+}
+
+// SourceCounts records how many rows the source presented, independent of how
+// many the importer processed (skips make the two differ).
+type SourceCounts struct {
+	Devices      int `json:"devices"`
+	Users        int `json:"users"`
+	Enrollments  int `json:"enrollments"`
+	Associations int `json:"associations"`
+	PushCerts    int `json:"push_certs"`
+	Pending      int `json:"pending_commands"`
+}
+
+// Report is the outcome. A trustworthy cutover requires Ok() == true.
 type Report struct {
 	Devices      int
 	Users        int
@@ -99,13 +133,46 @@ type Report struct {
 	Associations int
 	PushCerts    int
 	Disabled     int
-	Skipped      []string // ids skipped, with reasons
-	Mismatches   []string // verification failures — non-empty means DO NOT cut over
-	DryRun       bool
+	Skipped      []SkipEntry // rows skipped, with reasons + accepted flag
+	Mismatches   []string    // verification failures — non-empty means DO NOT cut over
+	// DisableFailures lists enrollment IDs whose source-disable did not take
+	// effect. These are NOT counted in Disabled and fail the run: a device the
+	// source had disabled that stays enabled after import is a safety hole.
+	DisableFailures []string
+	// CountsByType / CountsByTopic tally the source enrollments for evidence.
+	CountsByType  map[string]int
+	CountsByTopic map[string]int
+	// Source is the raw row count the source presented.
+	Source SourceCounts
+	// ExceptionFileSHA256 is echoed from Options for the evidence bundle.
+	ExceptionFileSHA256 string
+	DryRun              bool
 }
 
-// Ok reports whether the migration verified cleanly.
-func (r *Report) Ok() bool { return len(r.Mismatches) == 0 }
+// addSkip records a skipped row, marking it accepted when its ID is in the
+// operator's explicit exception set.
+func (r *Report) addSkip(id, reason string, opts Options) {
+	r.Skipped = append(r.Skipped, SkipEntry{
+		ID:       id,
+		Reason:   reason,
+		Accepted: opts.AllowedExceptions[id],
+	})
+}
+
+// Ok reports whether the migration verified cleanly and is safe to cut over.
+// It is fail-closed: any verification mismatch, any disable that did not take
+// effect, or any skip the operator did not explicitly accept fails the run.
+func (r *Report) Ok() bool {
+	if len(r.Mismatches) > 0 || len(r.DisableFailures) > 0 {
+		return false
+	}
+	for _, s := range r.Skipped {
+		if !s.Accepted {
+			return false
+		}
+	}
+	return true
+}
 
 // Importer migrates a Source into Cairn's storage.
 type Importer struct {
@@ -134,15 +201,31 @@ func userReq(ctx context.Context, id, parent string) *mdm.Request {
 	return r
 }
 
+// disableReq builds the correct request shape for disabling an enrollment:
+// user-channel rows need the user shape (with the parent device ID) so the
+// user channel — not the whole device — is the target.
+func disableReq(ctx context.Context, e EnrollmentRow) *mdm.Request {
+	if e.isUserChannel() {
+		return userReq(ctx, e.ID, e.DeviceID)
+	}
+	return deviceReq(ctx, e.ID)
+}
+
 // Run performs the migration and verification.
 func (im *Importer) Run(ctx context.Context, src Source, opts Options) (*Report, error) {
-	rep := &Report{DryRun: opts.DryRun}
+	rep := &Report{
+		DryRun:              opts.DryRun,
+		CountsByType:        map[string]int{},
+		CountsByTopic:       map[string]int{},
+		ExceptionFileSHA256: opts.ExceptionFileSHA256,
+	}
 
 	// Gate: the source queue should be drained (cutover step A3).
 	pending, err := src.PendingCommands(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("importer: count pending commands: %w", err)
 	}
+	rep.Source.Pending = pending
 	if pending > 0 && !opts.AllowPending {
 		return nil, fmt.Errorf("importer: source has %d pending queued commands — drain the queue before cutover, or pass -allow-pending to skip them (they will NOT be migrated)", pending)
 	}
@@ -152,6 +235,7 @@ func (im *Importer) Run(ctx context.Context, src Source, opts Options) (*Report,
 	if err != nil {
 		return nil, fmt.Errorf("importer: read push certs: %w", err)
 	}
+	rep.Source.PushCerts = len(pushCerts)
 	for _, pc := range pushCerts {
 		if !opts.DryRun {
 			if err := im.dst.StorePushCert(ctx, []byte(pc.CertPEM), []byte(pc.KeyPEM)); err != nil {
@@ -168,17 +252,18 @@ func (im *Importer) Run(ctx context.Context, src Source, opts Options) (*Report,
 	if err != nil {
 		return nil, fmt.Errorf("importer: read devices: %w", err)
 	}
+	rep.Source.Devices = len(devices)
 	for _, d := range devices {
 		authMsg, err := decodeAs[*mdm.Authenticate](d.Authenticate)
 		if err != nil {
-			rep.Skipped = append(rep.Skipped, fmt.Sprintf("device %s: bad Authenticate plist: %v", d.ID, err))
+			rep.addSkip(d.ID, fmt.Sprintf("bad Authenticate plist: %v", err), opts)
 			continue
 		}
 		if opts.DryRun {
 			// Validate the rest without writing.
 			if d.TokenUpdate != "" {
 				if _, err := decodeAs[*mdm.TokenUpdate](d.TokenUpdate); err != nil {
-					rep.Skipped = append(rep.Skipped, fmt.Sprintf("device %s: bad TokenUpdate plist: %v", d.ID, err))
+					rep.addSkip(d.ID, fmt.Sprintf("bad TokenUpdate plist: %v", err), opts)
 					continue
 				}
 			}
@@ -198,7 +283,7 @@ func (im *Importer) Run(ctx context.Context, src Source, opts Options) (*Report,
 		if d.TokenUpdate != "" {
 			tuMsg, err := decodeAs[*mdm.TokenUpdate](d.TokenUpdate)
 			if err != nil {
-				rep.Skipped = append(rep.Skipped, fmt.Sprintf("device %s: bad TokenUpdate plist: %v", d.ID, err))
+				rep.addSkip(d.ID, fmt.Sprintf("bad TokenUpdate plist: %v", err), opts)
 				continue
 			}
 			if err := im.dst.StoreTokenUpdate(req, tuMsg); err != nil {
@@ -213,7 +298,7 @@ func (im *Importer) Run(ctx context.Context, src Source, opts Options) (*Report,
 		if d.BootstrapTokenB64 != "" {
 			bs := &mdm.SetBootstrapToken{}
 			if err := bs.BootstrapToken.SetTokenString(d.BootstrapTokenB64); err != nil {
-				rep.Skipped = append(rep.Skipped, fmt.Sprintf("device %s: bad bootstrap token: %v", d.ID, err))
+				rep.addSkip(d.ID, fmt.Sprintf("bad bootstrap token: %v", err), opts)
 			} else if err := im.dst.StoreBootstrapToken(req, bs); err != nil {
 				return nil, fmt.Errorf("importer: device %s: store bootstrap token: %w", d.ID, err)
 			}
@@ -226,6 +311,7 @@ func (im *Importer) Run(ctx context.Context, src Source, opts Options) (*Report,
 	if err != nil {
 		return nil, fmt.Errorf("importer: read users: %w", err)
 	}
+	rep.Source.Users = len(users)
 	for _, u := range users {
 		req := userReq(ctx, u.ID, u.DeviceID)
 		for _, raw := range []string{u.UserAuthenticate, u.UserAuthDigest} {
@@ -234,7 +320,7 @@ func (im *Importer) Run(ctx context.Context, src Source, opts Options) (*Report,
 			}
 			uaMsg, err := decodeAs[*mdm.UserAuthenticate](raw)
 			if err != nil {
-				rep.Skipped = append(rep.Skipped, fmt.Sprintf("user %s: bad UserAuthenticate plist: %v", u.ID, err))
+				rep.addSkip(u.ID, fmt.Sprintf("bad UserAuthenticate plist: %v", err), opts)
 				continue
 			}
 			if !opts.DryRun {
@@ -246,7 +332,7 @@ func (im *Importer) Run(ctx context.Context, src Source, opts Options) (*Report,
 		if u.TokenUpdate != "" {
 			tuMsg, err := decodeAs[*mdm.TokenUpdate](u.TokenUpdate)
 			if err != nil {
-				rep.Skipped = append(rep.Skipped, fmt.Sprintf("user %s: bad TokenUpdate plist: %v", u.ID, err))
+				rep.addSkip(u.ID, fmt.Sprintf("bad TokenUpdate plist: %v", err), opts)
 				continue
 			}
 			if !opts.DryRun {
@@ -264,6 +350,7 @@ func (im *Importer) Run(ctx context.Context, src Source, opts Options) (*Report,
 	if err != nil {
 		return nil, fmt.Errorf("importer: read cert-auth associations: %w", err)
 	}
+	rep.Source.Associations = len(assocs)
 	for _, a := range assocs {
 		if !opts.DryRun {
 			if err := im.dst.AssociateCertHash(deviceReq(ctx, a.ID), a.SHA256); err != nil {
@@ -279,16 +366,31 @@ func (im *Importer) Run(ctx context.Context, src Source, opts Options) (*Report,
 		return nil, fmt.Errorf("importer: read enrollments: %w", err)
 	}
 	rep.Enrollments = len(enrollments)
+	rep.Source.Enrollments = len(enrollments)
+	for _, e := range enrollments {
+		t := e.Type
+		if t == "" {
+			t = "Device"
+		}
+		rep.CountsByType[t]++
+		rep.CountsByTopic[e.Topic]++
+	}
 	if opts.DryRun {
 		return rep, nil
 	}
 	for _, e := range enrollments {
-		if !e.Enabled {
-			if err := im.dst.Disable(deviceReq(ctx, e.ID)); err != nil {
-				im.log.Warn("import: disable failed", "id", e.ID, "err", err)
-			}
-			rep.Disabled++
+		if e.Enabled {
+			continue
 		}
+		if err := im.dst.Disable(disableReq(ctx, e)); err != nil {
+			// A disable that does not take effect is a safety hole: the source
+			// had this enrollment off. Record it and fail the run — do NOT
+			// count it as disabled.
+			im.log.Warn("import: disable failed", "id", e.ID, "err", err)
+			rep.DisableFailures = append(rep.DisableFailures, fmt.Sprintf("%s: %v", e.ID, err))
+			continue
+		}
+		rep.Disabled++
 	}
 
 	im.verify(ctx, src, enrollments, assocs, rep)

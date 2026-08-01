@@ -40,6 +40,13 @@ type SettingsSource interface {
 	GetSetting(ctx context.Context, key string) (string, error)
 }
 
+// APNSTopicSource lists the per-topic APNs push-certificate metadata the
+// dashboard renders. Modeling every topic (not one global setting) is the fix
+// for MDM-APNS-001 — a second fleet's expiry must not hide behind a later date.
+type APNSTopicSource interface {
+	ListAPNSTopics(ctx context.Context) ([]sqlite.APNSTopic, error)
+}
+
 // ProfileStore is the configuration-profile library plus per-device command
 // history (both live in the same storage).
 type ProfileStore interface {
@@ -78,6 +85,7 @@ type GrantStore interface {
 type Store interface {
 	DeviceSource
 	SettingsSource
+	APNSTopicSource
 	ProfileStore
 	GroupStore
 	GrantStore
@@ -109,18 +117,19 @@ type Config struct {
 
 // App is the admin console.
 type App struct {
-	sessions *auth.SessionStore
-	auth     Authenticator
-	devices  DeviceSource
-	settings SettingsSource
-	profiles ProfileStore
-	groups   GroupStore
-	grants   GrantStore
-	cmd      Commander
-	rec      Reconciler // may be nil (no auto-push)
-	cfg      Config
-	tmpl     *template.Template
-	log      *slog.Logger
+	sessions   *auth.SessionStore
+	auth       Authenticator
+	devices    DeviceSource
+	settings   SettingsSource
+	apnsTopics APNSTopicSource
+	profiles   ProfileStore
+	groups     GroupStore
+	grants     GrantStore
+	cmd        Commander
+	rec        Reconciler // may be nil (no auto-push)
+	cfg        Config
+	tmpl       *template.Template
+	log        *slog.Logger
 }
 
 // New builds the console. rec may be nil to disable assignment auto-push.
@@ -131,7 +140,7 @@ func New(sessions *auth.SessionStore, authn Authenticator, store Store, cmd Comm
 	}
 	return &App{
 		sessions: sessions, auth: authn,
-		devices: store, settings: store, profiles: store, groups: store, grants: store,
+		devices: store, settings: store, apnsTopics: store, profiles: store, groups: store, grants: store,
 		cmd: cmd, rec: rec, cfg: cfg, tmpl: tmpl, log: log,
 	}, nil
 }

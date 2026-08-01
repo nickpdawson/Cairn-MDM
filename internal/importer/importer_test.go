@@ -13,10 +13,13 @@ import (
 	"io"
 	"log/slog"
 	"math/big"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/dzsec/cairn/internal/storage/sqlite"
+	"github.com/micromdm/nanomdm/mdm"
+	"github.com/micromdm/nanomdm/storage"
 )
 
 // memSource is an in-memory Source for tests.
@@ -207,5 +210,197 @@ func TestImportDryRunWritesNothing(t *testing.T) {
 	}
 	if infos, err := db.NanoStorage(nil).RetrievePushInfo(ctx, []string{"UDID-A"}); err == nil && infos["UDID-A"] != nil {
 		t.Error("dry run wrote push info")
+	}
+}
+
+// badAuthDevice is a device whose Authenticate plist cannot be decoded, so the
+// importer skips it.
+func badAuthDevice(id string) DeviceRow {
+	return DeviceRow{ID: id, Authenticate: `<?xml version="1.0"?><plist version="1.0"><dict></dict></plist>`}
+}
+
+// TestSkippedRowFailsOk: a skipped row makes the run fail-closed.
+func TestSkippedRowFailsOk(t *testing.T) {
+	im, _ := newImporter(t)
+	src := testSource(t)
+	src.devices = append(src.devices, badAuthDevice("UDID-C"))
+
+	rep, err := im.Run(context.Background(), src, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Skipped) != 1 || rep.Skipped[0].ID != "UDID-C" {
+		t.Fatalf("expected one skip for UDID-C, got %+v", rep.Skipped)
+	}
+	if rep.Ok() {
+		t.Fatal("an unaccepted skip must fail the run")
+	}
+}
+
+// TestAcceptedExceptionAllowsSkip: an accepted exception lets that one skip
+// pass, but a second unlisted skip still fails the run.
+func TestAcceptedExceptionAllowsSkip(t *testing.T) {
+	im, _ := newImporter(t)
+	src := testSource(t)
+	src.devices = append(src.devices, badAuthDevice("UDID-C"))
+
+	rep, err := im.Run(context.Background(), src, Options{
+		AllowedExceptions: map[string]bool{"UDID-C": true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !rep.Ok() {
+		t.Fatalf("an accepted exception should pass: %+v", rep.Skipped)
+	}
+	if len(rep.Skipped) != 1 || !rep.Skipped[0].Accepted {
+		t.Fatalf("skip should be marked accepted: %+v", rep.Skipped)
+	}
+
+	// A second, unlisted skip still fails even though UDID-C is accepted.
+	im2, _ := newImporter(t)
+	src.devices = append(src.devices, badAuthDevice("UDID-D"))
+	rep2, err := im2.Run(context.Background(), src, Options{
+		AllowedExceptions: map[string]bool{"UDID-C": true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep2.Ok() {
+		t.Fatal("a second unlisted skip must still fail the run")
+	}
+}
+
+// disableFailStore wraps a real storage.AllStorage and forces Disable to fail
+// for named IDs, to exercise the disable-failure path.
+type disableFailStore struct {
+	storage.AllStorage
+	failIDs map[string]bool
+}
+
+func (s *disableFailStore) Disable(r *mdm.Request) error {
+	if s.failIDs[r.ID] {
+		return fmt.Errorf("simulated disable failure for %s", r.ID)
+	}
+	return s.AllStorage.Disable(r)
+}
+
+// TestDisableFailureFailsOk: a failed source-disable is recorded, is NOT
+// counted as disabled, and fails the run.
+func TestDisableFailureFailsOk(t *testing.T) {
+	ctx := context.Background()
+	db, err := sqlite.Open(ctx, t.TempDir()+"/import.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	store := &disableFailStore{AllStorage: db.NanoStorage(log), failIDs: map[string]bool{"UDID-B": true}}
+	im := New(store, db, log)
+
+	rep, err := im.Run(ctx, testSource(t), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.DisableFailures) != 1 {
+		t.Fatalf("expected one disable failure, got %+v", rep.DisableFailures)
+	}
+	if rep.Disabled != 0 {
+		t.Errorf("a failed disable must not be counted: Disabled=%d", rep.Disabled)
+	}
+	if rep.Ok() {
+		t.Fatal("a disable failure must fail the run")
+	}
+}
+
+// TestUserChannelDisableUsesUserRequest: user-channel rows disable through the
+// user request shape (User type + parent device ID), device rows through the
+// device shape.
+func TestUserChannelDisableUsesUserRequest(t *testing.T) {
+	ctx := context.Background()
+
+	user := EnrollmentRow{ID: "USER-1", DeviceID: "UDID-A", Type: "User"}
+	req := disableReq(ctx, user)
+	if req.EnrollID.Type != mdm.User {
+		t.Errorf("user row: type = %v, want User", req.EnrollID.Type)
+	}
+	if req.EnrollID.ParentID != "UDID-A" {
+		t.Errorf("user row: parent = %q, want UDID-A", req.EnrollID.ParentID)
+	}
+
+	// user_id present but Type unset still resolves to the user channel.
+	byUserID := EnrollmentRow{ID: "USER-2", DeviceID: "UDID-A", UserID: "u-2"}
+	if !byUserID.isUserChannel() {
+		t.Error("a row with user_id should be user-channel")
+	}
+
+	dev := EnrollmentRow{ID: "UDID-A", DeviceID: "UDID-A", Type: "Device"}
+	dreq := disableReq(ctx, dev)
+	if dreq.EnrollID.Type != mdm.Device || dreq.EnrollID.ParentID != "" {
+		t.Errorf("device row resolved to wrong shape: %+v", dreq.EnrollID)
+	}
+}
+
+// TestDryRunNeedsNoDestination: dry-run runs with a nil destination and creates
+// no database file (the importer never opens a dest in dry-run).
+func TestDryRunNeedsNoDestination(t *testing.T) {
+	ctx := context.Background()
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	dbPath := t.TempDir() + "/should-not-be-created.db"
+
+	im := New(nil, nil, log) // nil destination is safe in dry-run
+	rep, err := im.Run(ctx, testSource(t), Options{DryRun: true})
+	if err != nil {
+		t.Fatalf("dry-run with nil dest: %v", err)
+	}
+	if rep.Devices != 2 || !rep.DryRun {
+		t.Errorf("dry-run report = %+v", rep)
+	}
+	if _, err := os.Stat(dbPath); !os.IsNotExist(err) {
+		t.Errorf("dry run must not create a destination DB file (stat err=%v)", err)
+	}
+}
+
+// TestEvidenceBundleContents: the evidence bundle carries the expected counts
+// and the exception-file hash.
+func TestEvidenceBundleContents(t *testing.T) {
+	ctx := context.Background()
+	im, _ := newImporter(t)
+
+	rep, err := im.Run(ctx, testSource(t), Options{ExceptionFileSHA256: "deadbeefcafe"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !rep.Ok() {
+		t.Fatalf("baseline import should pass: %+v", rep.Mismatches)
+	}
+
+	started := time.Now().Add(-time.Minute)
+	ev := BuildEvidence(rep, started, time.Now())
+
+	if ev.CountsByType["Device"] != 2 {
+		t.Errorf("counts by type = %+v, want Device=2", ev.CountsByType)
+	}
+	if ev.CountsByTopic[testTopic] != 2 {
+		t.Errorf("counts by topic = %+v, want %s=2", ev.CountsByTopic, testTopic)
+	}
+	if ev.Source.Devices != 2 || ev.Source.PushCerts != 1 {
+		t.Errorf("source row counts wrong: %+v", ev.Source)
+	}
+	if ev.ExceptionFileSHA256 != "deadbeefcafe" {
+		t.Errorf("exception hash = %q", ev.ExceptionFileSHA256)
+	}
+
+	// Round-trips through the on-disk JSON form.
+	path := t.TempDir() + "/evidence.json"
+	if err := WriteEvidence(path, ev); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o600 {
+		t.Errorf("evidence perms = %#o, want 0600", fi.Mode().Perm())
 	}
 }

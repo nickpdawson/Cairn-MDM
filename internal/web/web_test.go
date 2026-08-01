@@ -117,6 +117,62 @@ func TestLoginThrottleReturns429(t *testing.T) {
 	}
 }
 
+func TestDashboardShowsPerTopicAPNs(t *testing.T) {
+	app, _, db := testApp(t)
+	m := mux(app)
+	ctx := context.Background()
+
+	// Two fleets: a migrated one expiring soon (the November cliff) and a test
+	// topic expiring in 2027. Both must appear; the nearer one must be flagged.
+	near := time.Now().AddDate(0, 0, 20).UTC().Format(time.RFC3339)
+	far := time.Now().AddDate(1, 1, 0).UTC().Format(time.RFC3339)
+	if err := db.UpsertAPNSTopic(ctx, "com.apple.mgmt.External.fleet-nov", near, "CN=fleet", "nick"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.UpsertAPNSTopic(ctx, "com.apple.mgmt.External.test-2027", far, "CN=test", "nick"); err != nil {
+		t.Fatal(err)
+	}
+
+	body := loadDashboard(t, m)
+	if !strings.Contains(body, "com.apple.mgmt.External.fleet-nov") {
+		t.Error("dashboard missing the near-expiry topic")
+	}
+	if !strings.Contains(body, "com.apple.mgmt.External.test-2027") {
+		t.Error("dashboard missing the far-expiry topic")
+	}
+	// The 20-day topic falls in the 30-day (warning) tier and must be flagged.
+	if !strings.Contains(body, "sev-warning") {
+		t.Error("dashboard did not flag the nearer-expiry topic with a renewal tier")
+	}
+	if !strings.Contains(body, "⚠️") {
+		t.Error("dashboard summary did not warn about an expiring APNs cert")
+	}
+}
+
+// loadDashboard logs in as the seeded admin and returns the /admin body.
+func loadDashboard(t *testing.T, m *http.ServeMux) string {
+	t.Helper()
+	form := strings.NewReader("username=nick&password=hunter2hunter2")
+	req := httptest.NewRequest(http.MethodPost, "/login", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	m.ServeHTTP(rr, req)
+	cookies := rr.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("login did not set a session cookie")
+	}
+	req2 := httptest.NewRequest(http.MethodGet, "/admin", nil)
+	for _, c := range cookies {
+		req2.AddCookie(c)
+	}
+	rr2 := httptest.NewRecorder()
+	m.ServeHTTP(rr2, req2)
+	if rr2.Code != http.StatusOK {
+		t.Fatalf("dashboard = %d, want 200", rr2.Code)
+	}
+	return rr2.Body.String()
+}
+
 func TestLoginRejectsBadPassword(t *testing.T) {
 	app, _, _ := testApp(t)
 	form := strings.NewReader("username=nick&password=wrong")

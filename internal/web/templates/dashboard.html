@@ -18,8 +18,8 @@
       <div class="card stat">
         {{with .APNs}}
           {{if .Loaded}}
-            <div class="num" style="font-size:20px">{{if .Warn}}⚠️{{else}}✓{{end}} {{if .Days}}{{.Days}}d{{else}}OK{{end}}</div>
-            <div class="label">APNs cert{{if .Expires}} · expires {{.Expires}}{{end}}</div>
+            <div class="num" style="font-size:20px">{{if .Warn}}⚠️{{else}}✓{{end}} {{.Count}}</div>
+            <div class="label">APNs {{if eq .Count 1}}topic{{else}}topics{{end}}{{with .Nearest}} · next expires {{.Expires}}{{end}}</div>
           {{else}}
             <div class="num" style="font-size:20px">—</div>
             <div class="label">APNs cert not loaded</div>
@@ -27,6 +27,29 @@
         {{end}}
       </div>
     </div>
+
+    {{with .APNs}}
+    {{if .Loaded}}
+    <h2>APNs certificates</h2>
+    <div class="card">
+      <table>
+        <thead><tr><th>Topic</th><th>Expires</th><th>Days left</th><th>Status</th></tr></thead>
+        <tbody>
+          {{range .Topics}}
+          <tr class="apns-{{.Severity}}">
+            <td class="mono">{{.Topic}}{{with .Subject}}<div class="sub mono">{{.}}</div>{{end}}</td>
+            <td>{{.Expires}}</td>
+            <td>{{.Days}}</td>
+            <td>
+              <span class="badge sev-{{.Severity}}">{{if .Warn}}⚠️ {{end}}{{.Label}}</span>
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    {{end}}
+    {{end}}
 
     <div class="card callout">
       <span>📲</span>
