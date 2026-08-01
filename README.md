@@ -23,17 +23,39 @@ by hand. Cairn embeds the MDM protocol server ([NanoMDM][nanomdm] via
 one config file and a SQLite database by default. The non-ABM path is
 first-class: you do not need an Apple Business Manager account to use Cairn.
 
-## Quick start (development)
+## Install
 
 ```sh
-git clone https://github.com/dzsec/cairn && cd cairn
-go build ./cmd/cairn
-cp docs/examples/cairn.toml.example ./cairn.toml   # then edit public_url etc.
-./cairn migrate -config ./cairn.toml               # create/upgrade the database
-./cairn serve   -config ./cairn.toml               # run (proxy TLS mode for now)
+# One line: detect OS/arch, download the matching release, VERIFY its sha256, install.
+curl -fsSL https://raw.githubusercontent.com/dzsec/cairn/main/packaging/install.sh | sh
 ```
 
-Health checks: `GET /healthz` (liveness), `GET /readyz` (readiness), `GET /version`.
+Or grab a release tarball / `.deb` / `.rpm` from the releases page, or run the
+container (`ghcr.io/dzsec/cairn`). Building from source: `go build ./cmd/cairn`
+(pure Go, `CGO_ENABLED=0`).
+
+## Quick start
+
+```sh
+# One command sets up config, the CA, and the admin account, and prints the
+# enrollment URL. It never surfaces PKI decisions unless you opt into them.
+cairn init --public-url https://mdm.example.org
+
+# Then load an APNs push certificate (free via mdmcert.download) and serve:
+cairn pushcert request -email you@example.org      # → decrypt → identity.apple.com → import
+cairn serve
+```
+
+`packaging/cairn.example.toml` documents the full config surface. Health
+endpoints: `GET /healthz` (liveness), `GET /readyz` (readiness), `GET /version`.
+
+## Migrating from NanoMDM
+
+`cairn import -from-mysql <dsn>` migrates an existing NanoMDM (MySQL) deployment
+with **zero device re-enrollment** — it replays the stored check-in state through
+Cairn's storage and verifies every enrollment is pushable and every certificate
+association intact before declaring success. See
+[docs/migrating-from-nanomdm.md](docs/migrating-from-nanomdm.md).
 
 ## Roadmap
 
