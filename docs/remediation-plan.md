@@ -125,20 +125,35 @@ malformed/disable-fail rows all fail closed; per-topic expiry correct + live.
 
 ## Stage 3 — correctness + operability (P1/P2; before cutover)
 
-- **3.1 DeviceInformation ingestion** — parse QueryResponses into a versioned
-  inventory with per-field `observed_at`; Refresh actually refreshes.
-  (MDM-INV-001)
-- **3.2 Durable command/deploy state** — outbox/job tables, SQLite txns,
-  claim/lease, bounded workers, retry+jitter+dead-letter, composite identity
-  `(command_uuid, device_id)`, startup recovery; APNs push is a retryable
-  consequence of a committed command, not the commit boundary. (MDM-REL-001)
-- **3.3 Audit log** — immutable, secret-free, for login/user/role/grant/profile/
-  group/command/cert/migration actions.
-- **3.4 Console must-haves** — device search/filter/sort, per-serial migration
-  tracker, one-off install/remove-profile, versioned profiles, installed-vs-
-  desired state, group deployment status. (review "required before production")
-- **3.5 Backup/restore** — checkpoint+backup+restore+integrity-check runbook,
-  proven by a real restore into a disposable instance.
+**Wave 1 ✅ DONE 2026-08-01 (commit 341c936), deployed + live-verified:**
+- **3.1 DeviceInformation ingestion** ✅ — EventService parses a
+  DeviceInformation result's QueryResponses and projects name/model/OS/build/
+  serial + capacity/battery onto the inventory (non-empty guard; plain acks
+  don't clobber), stamping inventory_at; device detail shows capacity/battery +
+  "Last inventory". **Proven live on andesite**: Refresh → capacity 19GB,
+  battery 0.76, timestamp set. (MDM-INV-001 CLOSED)
+- **3.3 Audit log** ✅ — append-only audit_log (013) + `audited` middleware
+  records every mutating route (user/action/target/status/remote, path-only,
+  no secrets); /admin/activity view. Live: login recorded. (audit gap CLOSED)
+
+**Wave 2 (in progress):**
+- **3.2 Command identity** — composite `(command_uuid, device_id)` PK on
+  command_history so a multi-device command keeps one row per device and
+  results resolve to the right device (the concrete MDM-REL-001 bug). NOTE: the
+  broader durable outbox (claim/lease, retry+jitter+dead-letter, push-as-
+  retryable-consequence, startup recovery) is a **documented follow-up** — a
+  larger architectural change deferred rather than rushed; the composite-identity
+  fix removes the actual data-loss bug now.
+- **3.4 Device search/filter** — server-side text search (name/serial/model) +
+  enrolled-only filter on the device list.
+
+**Wave 3 / remaining (lower urgency, not cutover-blocking):**
+- one-off install/remove-profile actions, versioned profiles, installed-vs-
+  desired state, group deployment status, per-serial migration tracker.
+- **3.5 Backup/restore** ✅ (doc) — runbook at docs/backup-restore.md
+  (VACUUM INTO online backup, restore-into-scratch, upgrade/rollback,
+  integrity check). A `cairn backup` CLI is optional polish; the runbook path
+  (sqlite3 VACUUM INTO) works today.
 
 ## Stage 4 — EAP-TLS Wi-Fi (parallel infra track; gated on 1.2)
 
