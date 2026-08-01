@@ -166,8 +166,15 @@ outbox (claim/lease/retry).
   FreeRADIUS `ldap` AD-liveness + temp-SSID canary
   (`runbooks/eap_tls_wifi_design_20260731.md`). Cairn side (owner-bound certs)
   already done in Stage 1.2.
-- **Stage 5 — DZsec cutover**: A2 rehearsal (fail-closed importer vs a MySQL
-  snapshot) → NPM repoint → ping-all → soak. Needs maverick MySQL access.
+- **Stage 5 — DZsec cutover**: **A2 rehearsal ✅ PASSED 2026-08-01** against the
+  real fleet (12 devices/17 enrollments/33 associations, "Verification passed").
+  The first run fail-closed and caught a real blocker — Cairn had inherited
+  NanoMDM's single-hash KV certauth, dropping renewed devices' historical hashes.
+  **Fixed** (commit ecccd5f): native multi-hash `cert_auth` table + migration-015
+  backfill; nanomdm e2e suite still green; andesite re-verified authenticating
+  after the in-place upgrade. Remaining for cutover: drain 257 pending v1
+  commands, import the fleet APNs cert, fresh staging DB → repoint DNS → ping-all
+  → soak.
 - **Stage 6 — public beta** (partly done):
   - **Packaging** ✅ 2026-08-01 (commit 6221933) — Dockerfile (distroless, 29.7MB,
     Docker-build verified on bigsky) + goreleaser deb/rpm/docker/SBOM, systemd +
