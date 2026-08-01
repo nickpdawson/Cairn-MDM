@@ -175,14 +175,20 @@ outbox (claim/lease/retry).
   after the in-place upgrade. Remaining for cutover: drain 257 pending v1
   commands, import the fleet APNs cert, fresh staging DB → repoint DNS → ping-all
   → soak.
-- **Stage 6 — public beta** (partly done):
-  - **Packaging** ✅ 2026-08-01 (commit 6221933) — Dockerfile (distroless, 29.7MB,
+- **Stage 6 — public beta** (mostly done):
+  - **Packaging** ✅ (commit 6221933) — Dockerfile (distroless, 29.7MB,
     Docker-build verified on bigsky) + goreleaser deb/rpm/docker/SBOM, systemd +
     FreeBSD rc.d units, install.sh with sha256 verification, cairn.example.toml,
     hermetic release hook. CI adds govulncheck (blocking) + gosec (advisory).
-  - Remaining: OIDC/MFA (Authentik), SHA-pin CI actions, in-repo fake-Apple-device
-    protocol test, responsive/a11y redesign + screenshot acceptance,
-    contributor/disclosure docs.
+  - **OIDC SSO** ✅ (commit ded32a7) — authorization-code flow (Authentik),
+    explicit group→role, state/nonce CSRF, wired via SetOIDC; deployed +
+    degrades gracefully when unconfigured. Completes Local+LDAP+OIDC. Live-verify
+    needs an Authentik app registered.
+  - **Contributor/disclosure docs** ✅ — README install/quickstart refresh,
+    CONTRIBUTING, CODE_OF_CONDUCT, SECURITY (+ threat model).
+  - Remaining: MFA, SHA-pin CI actions, in-repo fake-Apple-device protocol test,
+    responsive/a11y redesign + screenshot acceptance, Kerberos/SPNEGO (niche —
+    iOS-Safari SPNEGO is broken upstream), versioned-profile history.
 
 ## Stage 4 — EAP-TLS Wi-Fi (parallel infra track; gated on 1.2)
 
