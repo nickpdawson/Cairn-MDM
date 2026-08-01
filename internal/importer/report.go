@@ -116,6 +116,7 @@ func (r *Report) Summary() string {
 	fmt.Fprintf(&b, "  enrollments:        %d (%d disabled)\n", r.Enrollments, r.Disabled)
 	fmt.Fprintf(&b, "  cert associations:  %d\n", r.Associations)
 	fmt.Fprintf(&b, "  push certificates:  %d\n", r.PushCerts)
+	fmt.Fprintf(&b, "  pending (not migrated): %d\n", r.Source.Pending)
 	if len(r.CountsByType) > 0 {
 		fmt.Fprintf(&b, "  by type:            %s\n", joinCounts(r.CountsByType))
 	}

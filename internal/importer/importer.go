@@ -367,6 +367,7 @@ func (im *Importer) Run(ctx context.Context, src Source, opts Options) (*Report,
 	}
 	rep.Enrollments = len(enrollments)
 	rep.Source.Enrollments = len(enrollments)
+	sourceDisabled := 0
 	for _, e := range enrollments {
 		t := e.Type
 		if t == "" {
@@ -374,8 +375,15 @@ func (im *Importer) Run(ctx context.Context, src Source, opts Options) (*Report,
 		}
 		rep.CountsByType[t]++
 		rep.CountsByTopic[e.Topic]++
+		if !e.Enabled {
+			sourceDisabled++
+		}
 	}
 	if opts.DryRun {
+		// Report what the source has disabled (a real run would disable these in
+		// the destination); dry-run performs no writes, so this is the count that
+		// WOULD be disabled, surfaced accurately.
+		rep.Disabled = sourceDisabled
 		return rep, nil
 	}
 	for _, e := range enrollments {
