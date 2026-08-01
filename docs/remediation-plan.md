@@ -136,16 +136,16 @@ malformed/disable-fail rows all fail closed; per-topic expiry correct + live.
   records every mutating route (user/action/target/status/remote, path-only,
   no secrets); /admin/activity view. Live: login recorded. (audit gap CLOSED)
 
-**Wave 2 (in progress):**
-- **3.2 Command identity** — composite `(command_uuid, device_id)` PK on
-  command_history so a multi-device command keeps one row per device and
-  results resolve to the right device (the concrete MDM-REL-001 bug). NOTE: the
-  broader durable outbox (claim/lease, retry+jitter+dead-letter, push-as-
-  retryable-consequence, startup recovery) is a **documented follow-up** — a
-  larger architectural change deferred rather than rushed; the composite-identity
-  fix removes the actual data-loss bug now.
-- **3.4 Device search/filter** — server-side text search (name/serial/model) +
-  enrolled-only filter on the device list.
+**Wave 2 ✅ DONE 2026-08-01 (commit 99b0958), deployed + live-verified:**
+- **3.2 Command identity** ✅ — composite `(command_uuid, device_id)` PK
+  (migration 014, recreate-copy-rename, rows preserved — verified live:
+  andesite history intact). Multi-device commands keep one row per device;
+  results resolve per device. NOTE: the broader durable outbox (claim/lease,
+  retry+jitter+dead-letter, push-as-retryable-consequence, startup recovery) is
+  a **documented follow-up**, deferred rather than rushed. (MDM-REL-001 bug fixed)
+- **3.4 Device search/filter** ✅ — server-side name/serial/model/udid search
+  (injection-safe LIKE) + enrolled-only filter. Live: q=andesite matches,
+  q=nomatch shows "No devices match".
 
 **Wave 3 / remaining (lower urgency, not cutover-blocking):**
 - one-off install/remove-profile actions, versioned profiles, installed-vs-

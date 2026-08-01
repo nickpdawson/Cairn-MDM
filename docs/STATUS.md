@@ -62,6 +62,36 @@ builder-made Kerberos SSO profile auto-pushed by the reconciler and
 Acknowledged. Two strict-client findings fixed: profile SCEP URLs must be
 https (ATS), and extensiblesso `Type` must be `Credential` (capitalized).
 
+## Hardening sprint (2026-07-31/08-01) — third-party review + EAP-TLS plan
+
+Full plan + status: `docs/remediation-plan.md` (source of truth). All deployed to
+CT 226 + live-verified. Reference: `sol_mdmreview_20260731.md`.
+
+- **Stage 0** ✅ — DB/WAL/SHM 0600, session tokens hashed at rest, HTTP security
+  headers + no-store + timeouts + body limits + same-origin, no-echo password
+  prompts, `ldap://`-without-TLS rejected, traceable build (version/commit/date),
+  NOTICE + SECURITY.md.
+- **Stage 1** ✅ — one-time enrollment grants (bare `/enroll` now 404;
+  `/e/{token}` single-use, 410 on replay); per-device `%SerialNumber%` CN +
+  owner rfc822 SAN; CMS-signed profiles via a dedicated LE cert (DNS-01,
+  chains to ISRG → green "Verified"); login throttle/lockout + session
+  idle/absolute limits + password-reset session revocation + min password length.
+- **Stage 2** ✅ — fail-closed importer (fails on any skip/disable-failure/
+  mismatch; exception-file with hash; non-mutating dry-run; `-force` DB guard;
+  JSON evidence bundle; DSN off argv); per-topic APNs (validate before store;
+  `apns_topics` table; dashboard per-topic expiry tiers; `pushcert check`).
+- **Stage 3 core** ✅ — DeviceInformation ingestion (Refresh actually refreshes;
+  proven on andesite); append-only audit log + /admin/activity; composite
+  `(command_uuid, device_id)` command identity; device search/filter.
+  Backup/restore runbook (`docs/backup-restore.md`).
+
+New CLIs: `cairn admin add/passwd/list/del/testauth`, `cairn pushcert
+request/decrypt/check`, `cairn import -from-mysql[-file]`.
+
+Deferred follow-ups (documented, not cutover-blocking): full durable command
+outbox (claim/lease/retry), one-off install/remove-profile UI, versioned
+profiles + installed-vs-desired, per-serial migration tracker, `cairn backup` CLI.
+
 ## Remaining
 - **Phase 2 polish (optional)** — DB-backed audit log (mutations currently get
   structured slog entries with user attribution), live SSE command results,
