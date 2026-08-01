@@ -5,7 +5,14 @@
   {{template "topbar" .}}
   <main>
     <h1>Devices</h1>
+    <form class="filters" method="get" action="/admin/devices">
+      <input type="search" name="q" value="{{.Q}}" placeholder="Search name, serial, or model">
+      <label><input type="checkbox" name="enrolled" value="1" {{if .Enrolled}}checked{{end}}> Enrolled only</label>
+      <button type="submit">Search</button>
+      {{if or .Q .Enrolled}}<a href="/admin/devices">Clear</a>{{end}}
+    </form>
     <div class="card">
+      <p class="sub">{{.Count}} device{{if ne .Count 1}}s{{end}}</p>
       {{if .Devices}}
       <table>
         <thead>
@@ -28,7 +35,11 @@
         </tbody>
       </table>
       {{else}}
+      {{if or .Q .Enrolled}}
+      <div class="empty">No devices match.</div>
+      {{else}}
       <div class="empty">No devices enrolled yet.</div>
+      {{end}}
       {{end}}
     </div>
   </main>

@@ -12,6 +12,7 @@ import (
 
 	"github.com/dzsec/cairn/internal/auth"
 	"github.com/dzsec/cairn/internal/config"
+	"github.com/dzsec/cairn/internal/mdmcore"
 	"github.com/dzsec/cairn/internal/storage/sqlite"
 )
 
@@ -171,6 +172,51 @@ func loadDashboard(t *testing.T, m *http.ServeMux) string {
 		t.Fatalf("dashboard = %d, want 200", rr2.Code)
 	}
 	return rr2.Body.String()
+}
+
+func TestDevicesSearchFilters(t *testing.T) {
+	app, _, db := testApp(t)
+	m := mux(app)
+	ctx := context.Background()
+
+	if err := db.DeviceEnrolled(ctx, mdmcore.DeviceRecord{
+		ID: "UDID-RIDGE", UDID: "UDID-RIDGE", Serial: "C02RIDGE", Name: "Ridge MBP", Model: "MacBookPro18,2",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.DeviceEnrolled(ctx, mdmcore.DeviceRecord{
+		ID: "UDID-SUMMIT", UDID: "UDID-SUMMIT", Serial: "C02SUMMIT", Name: "Summit Air", Model: "MacBookAir10,1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Log in and reuse the session cookie for the devices request.
+	form := strings.NewReader("username=nick&password=hunter2hunter2")
+	loginReq := httptest.NewRequest(http.MethodPost, "/login", form)
+	loginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginRR := httptest.NewRecorder()
+	m.ServeHTTP(loginRR, loginReq)
+	cookies := loginRR.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("login did not set a session cookie")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/devices?q=Ridge", nil)
+	for _, c := range cookies {
+		req.AddCookie(c)
+	}
+	rr := httptest.NewRecorder()
+	m.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("devices search = %d, want 200", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "Ridge MBP") {
+		t.Error("devices search body missing the matching device")
+	}
+	if strings.Contains(body, "Summit Air") {
+		t.Error("devices search body included a non-matching device")
+	}
 }
 
 func TestLoginRejectsBadPassword(t *testing.T) {

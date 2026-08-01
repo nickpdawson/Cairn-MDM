@@ -12,6 +12,7 @@ import (
 
 	"github.com/dzsec/cairn/internal/auth"
 	"github.com/dzsec/cairn/internal/push"
+	"github.com/dzsec/cairn/internal/storage/sqlite"
 )
 
 // loginThrottles associates a *LoginThrottle with an App without adding a field
@@ -301,14 +302,36 @@ func (a *App) handleDeviceRefresh(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/devices/"+id+"?flash=Refresh+queued", http.StatusSeeOther)
 }
 
+// deviceFilterer is the optional filtered-list capability. The concrete store
+// (*sqlite.DB) implements it; the narrow DeviceSource interface in web.go
+// (outside this file's ownership) does not, so handleDevices type-asserts for it
+// and falls back to an unfiltered list if it is unavailable.
+type deviceFilterer interface {
+	ListDevicesFiltered(ctx context.Context, query string, enrolledOnly bool) ([]sqlite.Device, error)
+}
+
 func (a *App) handleDevices(w http.ResponseWriter, r *http.Request) {
-	devices, err := a.devices.ListDevices(r.Context())
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	enrolled := r.URL.Query().Get("enrolled") == "1"
+
+	var (
+		devices []sqlite.Device
+		err     error
+	)
+	if f, ok := a.devices.(deviceFilterer); ok {
+		devices, err = f.ListDevicesFiltered(r.Context(), q, enrolled)
+	} else {
+		devices, err = a.devices.ListDevices(r.Context())
+	}
 	if err != nil {
 		a.log.Error("list devices", "err", err)
 	}
 	a.render(w, r, http.StatusOK, "devices.html", map[string]any{
-		"Title":   "Devices",
-		"Devices": devices,
+		"Title":    "Devices",
+		"Devices":  devices,
+		"Q":        q,
+		"Enrolled": enrolled,
+		"Count":    len(devices),
 	})
 }
 

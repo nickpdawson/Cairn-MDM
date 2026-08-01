@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"strings"
 
 	"github.com/dzsec/cairn/internal/mdmcore"
 )
@@ -126,12 +127,42 @@ func (db *DB) DeviceInventory(ctx context.Context, id string, inv mdmcore.Device
 
 // ListDevices returns the inventory ordered by most-recently-seen.
 func (db *DB) ListDevices(ctx context.Context) ([]Device, error) {
-	rows, err := db.sql.QueryContext(ctx,
-		`SELECT id, udid, serial, name, model, product, os_version, build_version,
-		        available_capacity, battery,
-		        enrolled_at, last_seen, token_updated_at, inventory_at, checked_out_at
-		 FROM devices
-		 ORDER BY last_seen DESC`)
+	return db.ListDevicesFiltered(ctx, "", false)
+}
+
+// ListDevicesFiltered returns the inventory ordered by most-recently-seen,
+// optionally narrowed by a case-insensitive substring match of query against
+// name, serial, model, or udid, and by enrolledOnly (checked_out_at IS NULL).
+// An empty query applies no text filter. The query is bound as a parameter, so
+// it is injection-safe; any LIKE metacharacters in it match literally via an
+// explicit ESCAPE clause.
+func (db *DB) ListDevicesFiltered(ctx context.Context, query string, enrolledOnly bool) ([]Device, error) {
+	sqlStr := `SELECT id, udid, serial, name, model, product, os_version, build_version,
+	        available_capacity, battery,
+	        enrolled_at, last_seen, token_updated_at, inventory_at, checked_out_at
+	 FROM devices`
+	var where []string
+	var args []any
+	if query != "" {
+		// Escape LIKE metacharacters so a literal % or _ in the search box does
+		// not turn into a wildcard. '\' is the escape character.
+		pat := "%" + escapeLike(query) + "%"
+		where = append(where,
+			`(LOWER(name)   LIKE LOWER(?) ESCAPE '\'
+			  OR LOWER(serial) LIKE LOWER(?) ESCAPE '\'
+			  OR LOWER(model)  LIKE LOWER(?) ESCAPE '\'
+			  OR LOWER(udid)   LIKE LOWER(?) ESCAPE '\')`)
+		args = append(args, pat, pat, pat, pat)
+	}
+	if enrolledOnly {
+		where = append(where, `checked_out_at IS NULL`)
+	}
+	if len(where) > 0 {
+		sqlStr += " WHERE " + strings.Join(where, " AND ")
+	}
+	sqlStr += " ORDER BY last_seen DESC"
+
+	rows, err := db.sql.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -148,6 +179,13 @@ func (db *DB) ListDevices(ctx context.Context) ([]Device, error) {
 		out = append(out, d)
 	}
 	return out, rows.Err()
+}
+
+// escapeLike escapes the LIKE wildcards (%, _) and the escape character itself
+// so user input matches literally under an `ESCAPE '\'` clause.
+func escapeLike(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return r.Replace(s)
 }
 
 // GetDevice returns one device by ID, or sql.ErrNoRows if absent.

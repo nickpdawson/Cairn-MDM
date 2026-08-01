@@ -29,7 +29,7 @@ func (db *DB) CommandSent(ctx context.Context, deviceID, commandUUID, requestTyp
 	_, err := db.sql.ExecContext(ctx,
 		`INSERT INTO command_history (command_uuid, device_id, request_type)
 		 VALUES (?, ?, ?)
-		 ON CONFLICT (command_uuid) DO NOTHING`,
+		 ON CONFLICT (command_uuid, device_id) DO NOTHING`,
 		commandUUID, deviceID, requestType)
 	return err
 }
@@ -42,8 +42,8 @@ func (db *DB) CommandResult(ctx context.Context, deviceID, commandUUID, status, 
 	if _, err := db.sql.ExecContext(ctx,
 		`UPDATE command_history
 		 SET status = ?, error = ?, result_at = datetime('now')
-		 WHERE command_uuid = ?`,
-		status, errDesc, commandUUID); err != nil {
+		 WHERE command_uuid = ? AND device_id = ?`,
+		status, errDesc, commandUUID, deviceID); err != nil {
 		return err
 	}
 	var deployStatus string
@@ -55,9 +55,12 @@ func (db *DB) CommandResult(ctx context.Context, deviceID, commandUUID, status, 
 	default: // NotNow etc. — still in flight
 		return nil
 	}
+	// profile_deploys is keyed (device_id, profile_id) with command_uuid stored;
+	// an InstallProfile UUID is per-device, so command_uuid alone resolves the
+	// right row. Scope by device_id too as a belt-and-suspenders guard.
 	_, err := db.sql.ExecContext(ctx,
 		`UPDATE profile_deploys SET status = ?, updated_at = datetime('now')
-		 WHERE command_uuid = ?`, deployStatus, commandUUID)
+		 WHERE command_uuid = ? AND device_id = ?`, deployStatus, commandUUID, deviceID)
 	return err
 }
 

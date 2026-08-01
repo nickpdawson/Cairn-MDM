@@ -41,6 +41,93 @@ func req(id string) *mdm.Request {
 	return &mdm.Request{EnrollID: &mdm.EnrollID{Type: mdm.Device, ID: id}}
 }
 
+func TestListDevicesFiltered(t *testing.T) {
+	ctx := context.Background()
+	db, err := Open(ctx, t.TempDir()+"/filter.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	seed := []mdmcore.DeviceRecord{
+		{ID: "UDID-A", UDID: "UDID-A", Serial: "C02ALPHA", Name: "Ridge MBP", Model: "MacBookPro18,2"},
+		{ID: "UDID-B", UDID: "UDID-B", Serial: "C02BRAVO", Name: "Summit Air", Model: "MacBookAir10,1"},
+		{ID: "UDID-C", UDID: "UDID-C", Serial: "C02CHARLIE", Name: "Basin Mini", Model: "Macmini9,1"},
+	}
+	for _, d := range seed {
+		if err := db.DeviceEnrolled(ctx, d); err != nil {
+			t.Fatalf("seed %s: %v", d.ID, err)
+		}
+	}
+	// Check out one device so enrolledOnly can be exercised.
+	if err := db.DeviceCheckedOut(ctx, "UDID-C"); err != nil {
+		t.Fatal(err)
+	}
+
+	ids := func(devs []Device) map[string]bool {
+		m := map[string]bool{}
+		for _, d := range devs {
+			m[d.ID] = true
+		}
+		return m
+	}
+
+	// Empty query returns all three.
+	all, err := db.ListDevicesFiltered(ctx, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("empty query returned %d, want 3", len(all))
+	}
+
+	// Match by name substring.
+	byName, err := db.ListDevicesFiltered(ctx, "Ridge", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ids(byName); len(got) != 1 || !got["UDID-A"] {
+		t.Errorf("name match = %v, want only UDID-A", got)
+	}
+
+	// Match by serial.
+	bySerial, err := db.ListDevicesFiltered(ctx, "C02BRAVO", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ids(bySerial); len(got) != 1 || !got["UDID-B"] {
+		t.Errorf("serial match = %v, want only UDID-B", got)
+	}
+
+	// Match by model.
+	byModel, err := db.ListDevicesFiltered(ctx, "MacBookAir", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ids(byModel); len(got) != 1 || !got["UDID-B"] {
+		t.Errorf("model match = %v, want only UDID-B", got)
+	}
+
+	// Case-insensitive match.
+	byLower, err := db.ListDevicesFiltered(ctx, "ridge", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ids(byLower); len(got) != 1 || !got["UDID-A"] {
+		t.Errorf("case-insensitive match = %v, want only UDID-A", got)
+	}
+
+	// enrolledOnly excludes the checked-out device.
+	enrolled, err := db.ListDevicesFiltered(ctx, "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := ids(enrolled)
+	if len(got) != 2 || got["UDID-C"] {
+		t.Errorf("enrolledOnly = %v, want UDID-A and UDID-B without UDID-C", got)
+	}
+}
+
 func TestDeviceProjectionLifecycle(t *testing.T) {
 	ctx := context.Background()
 	db, err := Open(ctx, t.TempDir()+"/dev.db")
