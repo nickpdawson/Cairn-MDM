@@ -147,13 +147,29 @@ malformed/disable-fail rows all fail closed; per-topic expiry correct + live.
   (injection-safe LIKE) + enrolled-only filter. Live: q=andesite matches,
   q=nomatch shows "No devices match".
 
-**Wave 3 / remaining (lower urgency, not cutover-blocking):**
-- one-off install/remove-profile actions, versioned profiles, installed-vs-
-  desired state, group deployment status, per-serial migration tracker.
-- **3.5 Backup/restore** ✅ (doc) — runbook at docs/backup-restore.md
-  (VACUUM INTO online backup, restore-into-scratch, upgrade/rollback,
-  integrity check). A `cairn backup` CLI is optional polish; the runbook path
-  (sqlite3 VACUUM INTO) works today.
+**Wave 3 ✅ DONE 2026-08-01 (commits 0c5152c, e92c57c), deployed + live-verified:**
+- **Profile management UI** ✅ — device detail: one-off Install (from library) +
+  per-profile Remove (audited, CSRF), plus a Profiles section with deploy
+  status; profile detail: "Deployed to" device list; group detail: per-profile
+  "N installed · N pending · N failed". Live: andesite shows SSO profile
+  installed; group shows 1 installed. (review console gap CLOSED)
+- **3.5 Backup** ✅ — `cairn backup` (online VACUUM INTO + integrity check) +
+  runbook docs/backup-restore.md. Live: 245KB backup + integrity ok on the CT.
+
+**Still deferred (lower value, not cutover-blocking):** versioned-profile history
++ installed-vs-desired diff, per-serial migration tracker, full durable command
+outbox (claim/lease/retry).
+
+## What remains (post-remediation)
+
+- **Stage 4 — EAP-TLS Wi-Fi** (infra): OpenXPKI CRL issuance scheduling +
+  FreeRADIUS `ldap` AD-liveness + temp-SSID canary
+  (`runbooks/eap_tls_wifi_design_20260731.md`). Cairn side (owner-bound certs)
+  already done in Stage 1.2.
+- **Stage 5 — DZsec cutover**: A2 rehearsal (fail-closed importer vs a MySQL
+  snapshot) → NPM repoint → ping-all → soak. Needs maverick MySQL access.
+- **Stage 6 — public beta**: OIDC/MFA, packaging (Docker/systemd/rc.d/install.sh),
+  SBOM + signed artifacts + CI hardening, responsive/a11y redesign.
 
 ## Stage 4 — EAP-TLS Wi-Fi (parallel infra track; gated on 1.2)
 
