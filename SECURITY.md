@@ -35,6 +35,32 @@ steps, and the impact you observed.
 - Please give us a reasonable opportunity to remediate before any public
   disclosure.
 
+## Threat model (trust boundaries)
+
+Cairn is security-critical infrastructure — it can push configuration and
+commands to managed devices. The main boundaries it defends:
+
+- **Admin console.** Authenticated (local argon2id, LDAP/AD, or OIDC) with
+  explicit role assignment — there is no code path where "authenticated" implies
+  "admin". Sessions are DB-backed with hashed tokens in a `__Host-` cookie;
+  mutating routes require a CSRF token and same-origin; logins are throttled and
+  rate-limited; all mutations are audited.
+- **Device enrollment.** Enrollment requires a single-use, expiring grant
+  (`/e/{token}`); the bare `/enroll` is default-denied. Profiles are CMS-signed.
+  The SCEP challenge is never served without a valid grant.
+- **Device check-in (`/mdm`).** Every request is authenticated by the device's
+  identity certificate (SCEP-issued) via `Mdm-Signature`/mTLS; certauth binds
+  each enrollment to its certificate hash(es).
+- **Secrets at rest.** The SQLite database (CA key, APNs key, session tokens)
+  is enforced to mode 0600; config secrets are file/env-only, never inlined.
+- **Out of scope / operator responsibilities.** TLS termination and its cert
+  (ACME/files/proxy), the APNs push certificate (Apple-issued), the external
+  SCEP CA when used, host and network security, and physical device security.
+
+Reports that cross these boundaries (enrollment without a grant, check-in without
+a valid cert, privilege escalation in the console, secret exposure) are the
+highest priority.
+
 ## Secrets must never be committed
 
 Never commit secrets to this repository: APNs certificates and keys, SCEP
