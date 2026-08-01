@@ -108,6 +108,14 @@ func runImport(ctx context.Context, args []string) error {
 	}
 	finished := time.Now()
 
+	// Record per-topic APNs metadata for the imported push cert(s) so the
+	// console dashboard tracks the migrated fleet's expiry (MDM-APNS-001).
+	for _, pt := range rep.PushTopics {
+		if err := db.UpsertAPNSTopic(ctx, pt.Topic, pt.NotAfter, pt.Subject, "import"); err != nil {
+			log.Warn("record imported APNs topic metadata failed", "topic", pt.Topic, "err", err)
+		}
+	}
+
 	// Evidence bundle: an auditable record of what the run did.
 	evPath := *evidencePath
 	if evPath == "" {

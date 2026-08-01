@@ -404,3 +404,49 @@ func TestEvidenceBundleContents(t *testing.T) {
 		t.Errorf("evidence perms = %#o, want 0600", fi.Mode().Perm())
 	}
 }
+
+// expiredPushCertPEM makes a push cert already past NotAfter.
+func expiredPushCertPEM(t *testing.T) (string, string) {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	uidOID := asn1.ObjectIdentifier{0, 9, 2342, 19200300, 100, 1, 1}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(9),
+		Subject: pkix.Name{
+			CommonName: "APSP:test",
+			ExtraNames: []pkix.AttributeTypeAndValue{{Type: uidOID, Value: testTopic}},
+		},
+		NotBefore: time.Now().Add(-48 * time.Hour),
+		NotAfter:  time.Now().Add(-24 * time.Hour),
+	}
+	der, _ := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})),
+		string(pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)}))
+}
+
+func TestImportValidatesPushCertAndRecordsTopic(t *testing.T) {
+	ctx := context.Background()
+
+	// Valid cert → run succeeds and records the topic + expiry.
+	im, _ := newImporter(t)
+	rep, err := im.Run(ctx, testSource(t), Options{})
+	if err != nil {
+		t.Fatalf("import with valid push cert: %v", err)
+	}
+	if len(rep.PushTopics) != 1 || rep.PushTopics[0].Topic != testTopic || rep.PushTopics[0].NotAfter == "" {
+		t.Fatalf("push topic metadata not recorded: %+v", rep.PushTopics)
+	}
+
+	// Expired push cert → the run fails closed (a migrated fleet with an
+	// expired push cert can't be pushed).
+	im2, _ := newImporter(t)
+	src := testSource(t)
+	cert, key := expiredPushCertPEM(t)
+	src.pushCerts = []PushCertRow{{Topic: testTopic, CertPEM: cert, KeyPEM: key}}
+	if _, err := im2.Run(ctx, src, Options{}); err == nil {
+		t.Fatal("import should fail on an expired push cert")
+	}
+}

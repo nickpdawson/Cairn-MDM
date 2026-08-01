@@ -12,10 +12,13 @@ package importer
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/dzsec/cairn/internal/mdmcore"
+	"github.com/micromdm/nanomdm/cryptoutil"
 	"github.com/micromdm/nanomdm/mdm"
 	"github.com/micromdm/nanomdm/storage"
 )
@@ -90,6 +93,39 @@ type PushCertRow struct {
 	KeyPEM  string
 }
 
+// PushTopicMeta is a validated push-certificate's per-topic metadata, recorded
+// so the destination's APNs dashboard can track the migrated fleet's expiry.
+type PushTopicMeta struct {
+	Topic    string `json:"topic"`
+	NotAfter string `json:"not_after"` // RFC3339
+	Subject  string `json:"subject"`
+}
+
+// validatePushCert parses+validates an APNs push cert/key: the key must match
+// the cert, the topic must be extractable, and the cert must be currently valid
+// (not expired / not-yet-valid). Returns topic, RFC3339 not-after, subject DN.
+func validatePushCert(certPEM, keyPEM string) (topic, notAfter, subject string, err error) {
+	if _, err = tls.X509KeyPair([]byte(certPEM), []byte(keyPEM)); err != nil {
+		return "", "", "", fmt.Errorf("cert/key do not match: %w", err)
+	}
+	cert, err := cryptoutil.DecodePEMCertificate([]byte(certPEM))
+	if err != nil {
+		return "", "", "", fmt.Errorf("parse cert: %w", err)
+	}
+	topic, err = cryptoutil.TopicFromCert(cert)
+	if err != nil {
+		return "", "", "", fmt.Errorf("extract topic: %w", err)
+	}
+	now := time.Now()
+	if now.Before(cert.NotBefore) {
+		return "", "", "", fmt.Errorf("push cert not valid until %s", cert.NotBefore.Format(time.RFC3339))
+	}
+	if now.After(cert.NotAfter) {
+		return "", "", "", fmt.Errorf("push cert EXPIRED %s — the migrated fleet could not be pushed", cert.NotAfter.Format(time.RFC3339))
+	}
+	return topic, cert.NotAfter.UTC().Format(time.RFC3339), cert.Subject.String(), nil
+}
+
 // Options controls an import run.
 type Options struct {
 	// AllowPending proceeds even if the source command queue is not empty
@@ -144,6 +180,8 @@ type Report struct {
 	CountsByTopic map[string]int
 	// Source is the raw row count the source presented.
 	Source SourceCounts
+	// PushTopics is the validated per-topic metadata for imported push certs.
+	PushTopics []PushTopicMeta
 	// ExceptionFileSHA256 is echoed from Options for the evidence bundle.
 	ExceptionFileSHA256 string
 	DryRun              bool
@@ -230,13 +268,24 @@ func (im *Importer) Run(ctx context.Context, src Source, opts Options) (*Report,
 		return nil, fmt.Errorf("importer: source has %d pending queued commands — drain the queue before cutover, or pass -allow-pending to skip them (they will NOT be migrated)", pending)
 	}
 
-	// Push certificates first (device records reference topics).
+	// Push certificates first (device records reference topics). Each is
+	// validated before storage — a migrated fleet whose push cert is expired or
+	// whose key does not match is dead on arrival (no pushes), so that fails the
+	// run. Validated topics + expiry are recorded so the per-topic APNs
+	// dashboard surfaces the migrated fleet's renewal deadline.
 	pushCerts, err := src.PushCerts(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("importer: read push certs: %w", err)
 	}
 	rep.Source.PushCerts = len(pushCerts)
 	for _, pc := range pushCerts {
+		topic, notAfter, subject, err := validatePushCert(pc.CertPEM, pc.KeyPEM)
+		if err != nil {
+			return nil, fmt.Errorf("importer: push cert %s: %w", pc.Topic, err)
+		}
+		rep.PushTopics = append(rep.PushTopics, PushTopicMeta{
+			Topic: topic, NotAfter: notAfter, Subject: subject,
+		})
 		if !opts.DryRun {
 			if err := im.dst.StorePushCert(ctx, []byte(pc.CertPEM), []byte(pc.KeyPEM)); err != nil {
 				return nil, fmt.Errorf("importer: store push cert %s: %w", pc.Topic, err)
