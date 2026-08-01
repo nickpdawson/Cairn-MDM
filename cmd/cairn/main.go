@@ -56,6 +56,8 @@ func main() {
 		err = runAdmin(ctx, args)
 	case "import":
 		err = runImport(ctx, args)
+	case "backup":
+		err = runBackup(ctx, args)
 	case "version", "-v", "--version":
 		fmt.Println(version.Info())
 	case "help", "-h", "--help":
@@ -87,6 +89,7 @@ Commands:
   ca         manage the certificate authority (export)
   admin      manage console accounts (add, passwd, list, del)
   import     migrate a NanoMDM MySQL deployment (zero re-enrollment)
+  backup     write a consistent SQLite backup (online VACUUM INTO)
   version    print build information
   help       show this help
 
