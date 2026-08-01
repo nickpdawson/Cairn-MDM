@@ -1,0 +1,30 @@
+#!/bin/sh
+#
+# FreeBSD rc.d script for Cairn.
+#
+# PROVIDE: cairn
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+#
+# Add to /etc/rc.conf:
+#   cairn_enable="YES"
+#   cairn_config="/usr/local/etc/cairn/cairn.toml"   # optional override
+#   cairn_user="cairn"                                # optional override
+
+. /etc/rc.subr
+
+name="cairn"
+rcvar="cairn_enable"
+
+load_rc_config $name
+
+: ${cairn_enable:="NO"}
+: ${cairn_user:="cairn"}
+: ${cairn_config:="/usr/local/etc/cairn/cairn.toml"}
+
+pidfile="/var/run/${name}.pid"
+command="/usr/sbin/daemon"
+procname="/usr/local/bin/cairn"
+command_args="-c -f -p ${pidfile} -u ${cairn_user} ${procname} serve --config ${cairn_config}"
+
+run_rc_command "$1"

@@ -1,0 +1,9 @@
+# goreleaser builds the binary, then this wraps the prebuilt artifact in a
+# distroless runtime (CA roots for APNs/OIDC/ACME egress; nonroot).
+FROM gcr.io/distroless/static:nonroot
+COPY cairn /usr/local/bin/cairn
+VOLUME ["/var/lib/cairn"]
+USER nonroot:nonroot
+EXPOSE 443
+ENTRYPOINT ["/usr/local/bin/cairn"]
+CMD ["serve", "--config", "/etc/cairn/cairn.toml"]

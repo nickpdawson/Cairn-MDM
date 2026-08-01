@@ -1,0 +1,70 @@
+# Cairn configuration example. Copy to /etc/cairn/cairn.toml and edit, or run
+# `cairn init` to generate one interactively. Secrets are NEVER inlined — every
+# secret field has a *_file / *_env companion.
+
+[server]
+# The externally-reachable HTTPS base URL. Devices are enrolled against this
+# exact value, so it must not change after enrollment.
+public_url = "https://mdm.example.org"
+listen = ":443"
+mdm_path = "/mdm"
+
+[server.tls]
+# acme  — built-in Let's Encrypt (needs public DNS; the turnkey default)
+# files — operator-supplied cert_file/key_file (internal CA / BYO)
+# proxy — plaintext behind a terminating reverse proxy (nginx/caddy/NPM)
+mode = "acme"
+acme_email = "admin@example.org"
+# cert_file = "/etc/cairn/tls.crt"   # files mode
+# key_file  = "/etc/cairn/tls.key"
+
+[storage]
+driver = "sqlite"
+path = "/var/lib/cairn/cairn.db"
+
+[ca]
+# generate — self-sign a device CA on first boot (zero-PKI default)
+# import   — run the embedded SCEP CA but sign with your cert+key
+# external — delegate SCEP to OpenXPKI / NDES; Cairn does not issue
+mode = "generate"
+# [ca.import]
+# cert_file = "/etc/cairn/ca.crt"
+# key_file  = "/etc/cairn/ca.key"
+# [ca.external]
+# scep_url = "https://scep.example.org/scep/mdm"
+# ca_chain_file = "/etc/cairn/ca-chain.pem"
+# challenge_file = "/etc/cairn/scep-challenge"
+
+[enrollment]
+# false (default): enrollment requires a single-use grant link (/e/{token}).
+# true: also serve the bare, unauthenticated /enroll (low-stakes homelab only).
+allow_open = false
+
+# Sign enrollment profiles so devices show a verified signer. For the green
+# "Verified" badge the cert must chain to a public root (e.g. Let's Encrypt).
+# [profile.signing]
+# cert_file = "/etc/cairn/sign.crt"
+# key_file  = "/etc/cairn/sign.key"
+
+[auth]
+# Local accounts are always on (break-glass). LDAP/AD is optional.
+# [auth.ldap]
+# enabled = true
+# servers = ["ldaps://dc1.example.org:636", "ldaps://dc2.example.org:636"]
+# base_dn = "DC=example,DC=org"
+# bind_dn = "CN=svc-mdm,CN=Users,DC=example,DC=org"
+# bind_password_file = "/etc/cairn/ldap-bind-pw"
+# default_role = "user"
+# [auth.ldap.group_roles]
+# "CN=MDM Admins,CN=Users,DC=example,DC=org" = "admin"
+
+# [auth.login]   # all fields optional; safe defaults apply
+# max_attempts = 5
+# lockout_seconds = 900
+# min_password_len = 8
+# idle_timeout_mins = 60
+# max_lifetime_mins = 720
+
+[log]
+level = "info"
+format = "text"   # text | json

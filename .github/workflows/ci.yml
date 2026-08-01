@@ -56,3 +56,26 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          check-latest: true
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+      - name: gosec
+        # Advisory: reports issues without failing the build (the remaining
+        # findings are CLI-path / static-query false positives; the material
+        # HTTP-timeout + file-mode ones are fixed).
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec -quiet ./... || true
+
+# TODO(supply-chain): pin these actions to immutable commit SHAs (e.g. via
+# `ratchet`) instead of version tags before the first public release.

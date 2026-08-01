@@ -1,11 +1,13 @@
 # goreleaser configuration for Cairn.
-# Full release wiring (Docker, SBOM, signing, brew tap) lands in Phase 5;
-# this establishes the cross-platform binary matrix now.
 version: 2
 
 before:
   hooks:
-    - go mod tidy
+    # Hermetic: verify the module cache matches go.sum instead of mutating
+    # go.mod/go.sum at release time (`go mod tidy` would make releases
+    # non-reproducible from a clean checkout).
+    - go mod download
+    - go mod verify
 
 builds:
   - id: cairn
@@ -33,9 +35,54 @@ builds:
 archives:
   - formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - NOTICE
+      - README.md
+      - src: packaging/cairn.example.toml
+        dst: .
+      - src: packaging/systemd/cairn.service
+        dst: .
+      - src: packaging/rc.d/cairn
+        dst: .
+
+# Linux packages (deb/rpm) install the binary + systemd unit + example config.
+nfpms:
+  - id: cairn
+    package_name: cairn
+    maintainer: DZsec <security@dzsec.net>
+    description: Single-binary Apple MDM server.
+    license: MIT
+    homepage: https://github.com/dzsec/cairn
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/local/bin
+    contents:
+      - src: packaging/systemd/cairn.service
+        dst: /lib/systemd/system/cairn.service
+      - src: packaging/cairn.example.toml
+        dst: /etc/cairn/cairn.example.toml
+        type: config
+    # A dedicated system user owns the data dir.
+    scripts:
+      preinstall: packaging/scripts/preinstall.sh
+
+dockers:
+  - image_templates:
+      - "ghcr.io/dzsec/cairn:{{ .Version }}"
+      - "ghcr.io/dzsec/cairn:latest"
+    dockerfile: packaging/Dockerfile.goreleaser
+    build_flag_templates:
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.source=https://github.com/dzsec/cairn"
 
 checksum:
   name_template: "checksums.txt"
+
+sboms:
+  - artifacts: archive
 
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
