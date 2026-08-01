@@ -187,6 +187,134 @@ func TestLDAPPlaintextWithoutStartTLSFails(t *testing.T) {
 	}
 }
 
+// oidcConfig builds an OIDC config block with the client secret supplied from
+// an env var (the preferred source). The caller supplies extra body lines.
+func oidcConfig(t *testing.T, extra string) string {
+	t.Helper()
+	t.Setenv("TEST_OIDC_SECRET", "s3cr3t")
+	return `
+[server]
+public_url = "https://mdm.example.com"
+listen = ":8443"
+[server.tls]
+mode = "proxy"
+[storage]
+driver = "sqlite"
+path = "/tmp/x.db"
+[auth.oidc]
+enabled = true
+issuer_url = "https://idp.example.org/o/cairn/"
+client_id = "cairn"
+client_secret_env = "TEST_OIDC_SECRET"
+` + extra
+}
+
+func TestOIDCValidConfigPasses(t *testing.T) {
+	p := writeTemp(t, oidcConfig(t, `
+group_claim = "groups"
+default_role = "user"
+[auth.oidc.group_roles]
+"cairn-admins" = "admin"
+`))
+	cfg, err := Load(p)
+	if err != nil {
+		t.Fatalf("valid OIDC config should pass, got: %v", err)
+	}
+	if cfg.Auth.OIDC.ClientSecret != "s3cr3t" {
+		t.Errorf("client secret = %q, want value resolved from env", cfg.Auth.OIDC.ClientSecret)
+	}
+	// Defaults fill in unset fields.
+	d := cfg.Auth.OIDC.WithDefaults()
+	if d.UsernameClaim != "preferred_username" || len(d.Scopes) == 0 {
+		t.Errorf("WithDefaults did not fill username_claim/scopes: %+v", d)
+	}
+}
+
+func TestOIDCRequiresIssuerClientAndSecret(t *testing.T) {
+	// Missing issuer_url, client_id, and secret source.
+	p := writeTemp(t, `
+[server]
+public_url = "https://mdm.example.com"
+listen = ":8443"
+[server.tls]
+mode = "proxy"
+[storage]
+driver = "sqlite"
+path = "/tmp/x.db"
+[auth.oidc]
+enabled = true
+`)
+	_, err := Load(p)
+	if err == nil {
+		t.Fatal("expected error: oidc enabled without issuer/client/secret")
+	}
+	for _, want := range []string{"issuer_url", "client_id", "client_secret"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error should mention %q, got: %v", want, err)
+		}
+	}
+}
+
+func TestOIDCRejectsNonHTTPSIssuer(t *testing.T) {
+	p := writeTemp(t, `
+[server]
+public_url = "https://mdm.example.com"
+listen = ":8443"
+[server.tls]
+mode = "proxy"
+[storage]
+driver = "sqlite"
+path = "/tmp/x.db"
+[auth.oidc]
+enabled = true
+issuer_url = "http://idp.example.org/"
+client_id = "cairn"
+client_secret_env = "TEST_OIDC_SECRET_HTTP"
+`)
+	t.Setenv("TEST_OIDC_SECRET_HTTP", "x")
+	_, err := Load(p)
+	if err == nil || !strings.Contains(err.Error(), "issuer_url") {
+		t.Fatalf("expected https issuer_url error, got: %v", err)
+	}
+}
+
+func TestOIDCRejectsBadGroupRoleAndDefaultRole(t *testing.T) {
+	p := writeTemp(t, oidcConfig(t, `
+default_role = "superuser"
+[auth.oidc.group_roles]
+"cairn-admins" = "root"
+`))
+	_, err := Load(p)
+	if err == nil {
+		t.Fatal("expected error for bad group_roles value and default_role")
+	}
+	if !strings.Contains(err.Error(), "group_roles") {
+		t.Errorf("error should mention group_roles, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "default_role") {
+		t.Errorf("error should mention default_role, got: %v", err)
+	}
+}
+
+func TestOIDCDisabledSkipsValidation(t *testing.T) {
+	// A disabled block with nothing else set must not error.
+	p := writeTemp(t, `
+[server]
+public_url = "https://mdm.example.com"
+listen = ":8443"
+[server.tls]
+mode = "proxy"
+[storage]
+driver = "sqlite"
+path = "/tmp/x.db"
+[auth.oidc]
+enabled = false
+`)
+	if _, err := Load(p); err != nil {
+		t.Fatalf("disabled OIDC should not validate, got: %v", err)
+	}
+}
+
 func TestLoginPolicyWithDefaults(t *testing.T) {
 	// An entirely zero policy fills in every default.
 	got := LoginPolicy{}.WithDefaults()

@@ -145,7 +145,8 @@ type App struct {
 	audit      AuditStore
 	deploys    DeployStore
 	cmd        Commander
-	rec        Reconciler // may be nil (no auto-push)
+	rec        Reconciler   // may be nil (no auto-push)
+	oidc       OIDCProvider // may be nil (OIDC disabled); set via SetOIDC
 	cfg        Config
 	tmpl       *template.Template
 	log        *slog.Logger
@@ -153,15 +154,22 @@ type App struct {
 
 // New builds the console. rec may be nil to disable assignment auto-push.
 func New(sessions *auth.SessionStore, authn Authenticator, store Store, cmd Commander, rec Reconciler, cfg Config, log *slog.Logger) (*App, error) {
-	tmpl, err := template.New("").Funcs(funcMap).ParseFS(files, "templates/*.html")
+	a := &App{
+		sessions: sessions, auth: authn,
+		devices: store, settings: store, apnsTopics: store, profiles: store, groups: store, grants: store, audit: store, deploys: store,
+		cmd: cmd, rec: rec, cfg: cfg, log: log,
+	}
+	// oidcEnabled lets the login template render the SSO button only when an
+	// OIDC provider has been installed. The closure reads a.oidc at render time,
+	// after SetOIDC has (or has not) run during startup.
+	tmpl, err := template.New("").Funcs(funcMap).Funcs(template.FuncMap{
+		"oidcEnabled": func() bool { return a.oidc != nil },
+	}).ParseFS(files, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}
-	return &App{
-		sessions: sessions, auth: authn,
-		devices: store, settings: store, apnsTopics: store, profiles: store, groups: store, grants: store, audit: store, deploys: store,
-		cmd: cmd, rec: rec, cfg: cfg, tmpl: tmpl, log: log,
-	}, nil
+	a.tmpl = tmpl
+	return a, nil
 }
 
 // Register mounts the console routes on mux. Implementing this interface keeps
@@ -175,6 +183,12 @@ func (a *App) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /login", a.handleLoginForm)
 	mux.Handle("POST /login", a.audited(http.HandlerFunc(a.handleLogin)))
 	mux.Handle("POST /logout", a.audited(http.HandlerFunc(a.handleLogout)))
+
+	// OIDC single sign-on (redirect flow). Registered unconditionally: when no
+	// provider is installed the handlers render the login page with an error, so
+	// the login-page SSO link degrades gracefully.
+	mux.HandleFunc("GET /auth/oidc/login", a.handleOIDCLogin)
+	mux.HandleFunc("GET /auth/oidc/callback", a.handleOIDCCallback)
 
 	// Authenticated console (operator or higher).
 	mux.Handle("GET /admin", a.requireRole(auth.RoleOperator, a.handleDashboard))

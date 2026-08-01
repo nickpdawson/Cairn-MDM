@@ -113,6 +113,17 @@ func runServe(ctx context.Context, args []string) error {
 		return err
 	}
 	console.SetLoginThrottle(loginThrottle)
+
+	// OIDC single sign-on (redirect flow) is wired separately from the
+	// username/password authenticator chain.
+	oidcProvider, err := buildOIDC(ctx, cfg, log)
+	if err != nil {
+		return err
+	}
+	if oidcProvider != nil {
+		console.SetOIDC(oidcProvider)
+	}
+
 	deps.UI = console
 	log.Info("admin console ready", "path", "/admin")
 

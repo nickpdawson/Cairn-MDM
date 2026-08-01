@@ -104,6 +104,7 @@ func (s SigningCfg) Enabled() bool { return s.CertFile != "" || s.KeyFile != "" 
 // tried first when configured, with local as the fallback.
 type Auth struct {
 	LDAP  LDAPCfg     `toml:"ldap"`
+	OIDC  OIDCCfg     `toml:"oidc"`
 	Login LoginPolicy `toml:"login"`
 }
 
@@ -186,6 +187,64 @@ type LDAPCfg struct {
 	// CAFile adds a PEM CA bundle for validating the directory's TLS cert
 	// (internal-CA LDAPS). System roots are always included.
 	CAFile string `toml:"ca_file"`
+}
+
+// OIDCCfg configures OpenID Connect single sign-on (the authorization-code
+// login flow, e.g. against Authentik). Unlike LDAP this is a browser redirect
+// flow, not a username/password check — the console gets separate /auth/oidc/*
+// routes and mints a session after the callback.
+//
+// Role assignment is always explicit, exactly as for LDAP: a claim value from
+// group_claim maps to a role via group_roles; an authenticated user matching no
+// mapped group gets default_role. There is deliberately no code path where
+// "authenticated via the IdP" implies "admin".
+type OIDCCfg struct {
+	Enabled bool `toml:"enabled"`
+	// IssuerURL is the IdP's OIDC issuer (discovery base), e.g.
+	// "https://portal.dzsec.net:7443/application/o/cairn/". Must be https.
+	IssuerURL string `toml:"issuer_url"`
+	// ClientID is the confidential client's identifier registered at the IdP.
+	ClientID string `toml:"client_id"`
+	// ClientSecret is never inlined; supply it via client_secret_file/env.
+	ClientSecret     string `toml:"-"`
+	ClientSecretFile string `toml:"client_secret_file"`
+	ClientSecretEnv  string `toml:"client_secret_env"`
+	// Scopes requested at authorization. Default ["openid","profile","email",
+	// "groups"].
+	Scopes []string `toml:"scopes"`
+	// GroupClaim is the ID-token claim carrying the user's groups. Default
+	// "groups".
+	GroupClaim string `toml:"group_claim"`
+	// GroupRoles maps a group value (case-insensitive) to "admin", "operator",
+	// or "user". Matched against the values of group_claim.
+	GroupRoles map[string]string `toml:"group_roles"`
+	// DefaultRole applies when no mapped group matches (default "user").
+	DefaultRole string `toml:"default_role"`
+	// UsernameClaim is the claim used as the account username. Default
+	// "preferred_username"; falls back to "sub" when the claim is absent.
+	UsernameClaim string `toml:"username_claim"`
+	// CAFile adds a PEM CA bundle for validating the IdP's TLS cert (internal
+	// CA). System roots are always included.
+	CAFile string `toml:"ca_file"`
+}
+
+// WithDefaults returns a copy of o with any unset field replaced by its default.
+// It never mutates the receiver. Callers (the provider and the claim-mapping
+// helper) call this so an omitted field behaves consistently everywhere.
+func (o OIDCCfg) WithDefaults() OIDCCfg {
+	if len(o.Scopes) == 0 {
+		o.Scopes = []string{"openid", "profile", "email", "groups"}
+	}
+	if o.GroupClaim == "" {
+		o.GroupClaim = "groups"
+	}
+	if o.DefaultRole == "" {
+		o.DefaultRole = "user"
+	}
+	if o.UsernameClaim == "" {
+		o.UsernameClaim = "preferred_username"
+	}
+	return o
 }
 
 // Server holds HTTP listener and public-identity settings.
@@ -353,6 +412,15 @@ func resolveSecrets(cfg *Config) error {
 		cfg.Auth.LDAP.BindPassword = pw
 	}
 
+	// OIDC client secret.
+	if cfg.Auth.OIDC.Enabled {
+		sec, err := readSecret("auth.oidc.client_secret", "", cfg.Auth.OIDC.ClientSecretFile, cfg.Auth.OIDC.ClientSecretEnv)
+		if err != nil {
+			return err
+		}
+		cfg.Auth.OIDC.ClientSecret = sec
+	}
+
 	return nil
 }
 
@@ -476,6 +544,31 @@ func (c Config) Validate() error {
 		}
 		if l.DefaultRole != "" && l.DefaultRole != "admin" && l.DefaultRole != "operator" && l.DefaultRole != "user" {
 			errs = append(errs, fmt.Errorf("auth.ldap.default_role must be admin|operator|user, got %q", l.DefaultRole))
+		}
+	}
+
+	if o := c.Auth.OIDC; o.Enabled {
+		if o.IssuerURL == "" {
+			errs = append(errs, errors.New("auth.oidc.issuer_url is required when oidc is enabled"))
+		} else if u, err := url.Parse(o.IssuerURL); err != nil || u.Scheme != "https" || u.Host == "" {
+			errs = append(errs, fmt.Errorf("auth.oidc.issuer_url must be an absolute https URL, got %q", o.IssuerURL))
+		}
+		if o.ClientID == "" {
+			errs = append(errs, errors.New("auth.oidc.client_id is required when oidc is enabled"))
+		}
+		// ClientSecret has already been resolved from _file/_env by resolveSecrets.
+		if o.ClientSecret == "" {
+			errs = append(errs, errors.New("auth.oidc.client_secret_file or client_secret_env is required when oidc is enabled"))
+		}
+		for g, role := range o.GroupRoles {
+			switch role {
+			case "admin", "operator", "user":
+			default:
+				errs = append(errs, fmt.Errorf("auth.oidc.group_roles[%q] must be admin|operator|user, got %q", g, role))
+			}
+		}
+		if o.DefaultRole != "" && o.DefaultRole != "admin" && o.DefaultRole != "operator" && o.DefaultRole != "user" {
+			errs = append(errs, fmt.Errorf("auth.oidc.default_role must be admin|operator|user, got %q", o.DefaultRole))
 		}
 	}
 

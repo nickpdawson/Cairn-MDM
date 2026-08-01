@@ -14,6 +14,11 @@
         <input id="password" name="password" type="password" autocomplete="current-password">
         <button class="btn" type="submit">Sign in</button>
       </form>
+      {{if oidcEnabled}}
+      <div class="login-sso">
+        <a class="btn link" href="/auth/oidc/login">Sign in with SSO</a>
+      </div>
+      {{end}}
     </div>
   </div>
 </body>
