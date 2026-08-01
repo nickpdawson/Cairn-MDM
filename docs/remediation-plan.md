@@ -168,8 +168,14 @@ outbox (claim/lease/retry).
   already done in Stage 1.2.
 - **Stage 5 — DZsec cutover**: A2 rehearsal (fail-closed importer vs a MySQL
   snapshot) → NPM repoint → ping-all → soak. Needs maverick MySQL access.
-- **Stage 6 — public beta**: OIDC/MFA, packaging (Docker/systemd/rc.d/install.sh),
-  SBOM + signed artifacts + CI hardening, responsive/a11y redesign.
+- **Stage 6 — public beta** (partly done):
+  - **Packaging** ✅ 2026-08-01 (commit 6221933) — Dockerfile (distroless, 29.7MB,
+    Docker-build verified on bigsky) + goreleaser deb/rpm/docker/SBOM, systemd +
+    FreeBSD rc.d units, install.sh with sha256 verification, cairn.example.toml,
+    hermetic release hook. CI adds govulncheck (blocking) + gosec (advisory).
+  - Remaining: OIDC/MFA (Authentik), SHA-pin CI actions, in-repo fake-Apple-device
+    protocol test, responsive/a11y redesign + screenshot acceptance,
+    contributor/disclosure docs.
 
 ## Stage 4 — EAP-TLS Wi-Fi (parallel infra track; gated on 1.2)
 
