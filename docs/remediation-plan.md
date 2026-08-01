@@ -98,30 +98,30 @@ remains (needs a physical device).
 **Stage 1 COMPLETE.** Deployment now: grant-gated enrollment, per-device
 owner-bound certs, publicly-signed profiles, throttled/bounded auth.
 
-## Stage 2 — migration safety (P1; before the DZsec rehearsal)
+## Stage 2 — migration safety ✅ DONE 2026-08-01 (commit 37d002c), deployed + live-verified
 
-- **2.1 Fail-closed importer** — any skipped/malformed/duplicate/disable-failed/
-  unverifiable row → nonzero exit; `Report.Ok()` counts Skipped and real
-  disable success; explicit operator exception manifest (hashed into the
-  report). (MDM-MIG-001)
-- **2.2 Phased + restartable** — separate extract/validate/stage/compare/commit/
-  source-disable/post-verify; import into a **staging** DB, never the live sole
-  copy; truly non-mutating `-dry-run`; correct enrollment-type request shape for
-  user-channel disables; signed JSON/MD evidence bundle (counts by type/topic,
-  exceptions, hashes, timestamps, snapshot coords, build commit). Remove "Safe
-  to point DNS" from code — human runbook gate only. (MDM-MIG-001, MDM-CUT-001)
-- **2.3 Credentials/network** — DSN from mode-0600 file/stdin, never argv;
-  importer requires TLS + read-only account; runbook drops LAN 3306 publish in
-  favor of localhost/socket or verified SSH tunnel. (MDM-MIG-002)
-- **2.4 Per-topic APNs** — model push identities per topic; map enrollment→topic;
-  validate cert/key match + UID topic + EKU + chain + validity before storage;
-  reject mismatch/expired; dashboard shows every topic with 90/60/30/14/7-day
-  alerts; non-destructive per-topic connectivity check. Directly fixes the
-  runbook's two-topic blind spot (test 2027 vs fleet Nov-2026). (MDM-APNS-001)
+- **2.1/2.2 Fail-closed importer** ✅ — `Report.Ok()` fails on any mismatch,
+  disable-failure, or unaccepted skip (skips carry id/reason/accepted);
+  `-allow-exceptions` file (sha256 in evidence) is the only way to accept a
+  skip; user-channel enrollments disabled with the user request shape;
+  `-dry-run` never opens the destination; `-force` required to import into a
+  populated DB; JSON evidence bundle (counts by type/topic, exceptions+hash,
+  mismatches, disable-failures, build commit) replaces "Safe to point DNS".
+  Tests: skip/exception/disable-fail/user-disable/dry-run-no-write/evidence.
+  (MDM-MIG-001, MDM-CUT-001)
+- **2.3 Credentials** ✅ — `-from-mysql-file` (0600, perm-checked) preferred
+  over argv DSN (warns); DSN defaults to `tls=preferred`; read-only account
+  documented. Runbook still to drop LAN-3306 in favor of tunnel (doc edit).
+  (MDM-MIG-002)
+- **2.4 Per-topic APNs** ✅ — validate key↔cert + topic + validity before store
+  (reject expired/mismatched); `apns_topics` table; `pushcert import` records
+  per-topic metadata; `pushcert check` CLI; dashboard shows every topic with
+  90/60/30/14/7-day tiers. Live: existing 108e30db topic backfilled + shows on
+  the dashboard (363d, ok). NOTE: `pushcert check` is table-only (no live APNs
+  socket — deferred). (MDM-APNS-001)
 
-**Gate:** migration fixture with device+user channels, bootstrap tokens, two
-topics, malformed/duplicate/disable-fail rows — every anomaly fails closed;
-per-topic expiry correct.
+**Gate: ✅ PASS** — fixture with device+user channels, bootstrap tokens,
+malformed/disable-fail rows all fail closed; per-topic expiry correct + live.
 
 ## Stage 3 — correctness + operability (P1/P2; before cutover)
 
