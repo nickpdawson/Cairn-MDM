@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dzsec/cairn-mdm/internal/ca"
-	"github.com/dzsec/cairn-mdm/internal/config"
-	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
+	"github.com/nickpdawson/cairn-mdm/internal/ca"
+	"github.com/nickpdawson/cairn-mdm/internal/config"
+	"github.com/nickpdawson/cairn-mdm/internal/storage/sqlite"
 )
 
 func runCA(ctx context.Context, args []string) error {

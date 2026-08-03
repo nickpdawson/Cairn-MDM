@@ -31,8 +31,8 @@ import (
 	coreoidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 
-	"github.com/dzsec/cairn-mdm/internal/auth"
-	"github.com/dzsec/cairn-mdm/internal/config"
+	"github.com/nickpdawson/cairn-mdm/internal/auth"
+	"github.com/nickpdawson/cairn-mdm/internal/config"
 )
 
 // Provider runs the OIDC authorization-code flow against a discovered issuer.

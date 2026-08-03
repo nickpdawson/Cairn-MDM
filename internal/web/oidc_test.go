@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dzsec/cairn-mdm/internal/auth"
+	"github.com/nickpdawson/cairn-mdm/internal/auth"
 )
 
 // stubOIDC is a fake OIDCProvider: AuthCodeURL echoes the state, and Exchange

@@ -11,10 +11,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dzsec/cairn-mdm/internal/auth"
-	"github.com/dzsec/cairn-mdm/internal/ca"
-	"github.com/dzsec/cairn-mdm/internal/config"
-	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
+	"github.com/nickpdawson/cairn-mdm/internal/auth"
+	"github.com/nickpdawson/cairn-mdm/internal/ca"
+	"github.com/nickpdawson/cairn-mdm/internal/config"
+	"github.com/nickpdawson/cairn-mdm/internal/storage/sqlite"
 )
 
 // runInit is the single get-up-and-running command. It writes a config file,

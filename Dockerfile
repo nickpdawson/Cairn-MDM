@@ -12,13 +12,13 @@ ARG COMMIT=none
 ARG DATE=unknown
 RUN CGO_ENABLED=0 go build -trimpath \
     -ldflags "-s -w \
-      -X github.com/dzsec/cairn-mdm/internal/version.Version=${VERSION} \
-      -X github.com/dzsec/cairn-mdm/internal/version.Commit=${COMMIT} \
-      -X github.com/dzsec/cairn-mdm/internal/version.Date=${DATE}" \
+      -X github.com/nickpdawson/cairn-mdm/internal/version.Version=${VERSION} \
+      -X github.com/nickpdawson/cairn-mdm/internal/version.Commit=${COMMIT} \
+      -X github.com/nickpdawson/cairn-mdm/internal/version.Date=${DATE}" \
     -o /cairn ./cmd/cairn
 
 FROM gcr.io/distroless/static:nonroot
-LABEL org.opencontainers.image.source="https://github.com/dzsec/cairn-mdm" \
+LABEL org.opencontainers.image.source="https://github.com/nickpdawson/cairn-mdm" \
       org.opencontainers.image.description="Single-binary Apple MDM server" \
       org.opencontainers.image.licenses="MIT"
 COPY --from=build /cairn /usr/local/bin/cairn

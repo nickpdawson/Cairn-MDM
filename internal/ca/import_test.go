@@ -14,7 +14,7 @@ import (
 	scepdepot "github.com/micromdm/scep/v2/depot"
 	scep "github.com/smallstep/scep"
 
-	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
+	"github.com/nickpdawson/cairn-mdm/internal/storage/sqlite"
 )
 
 // makeCACertPEM builds a self-signed CA cert+key and returns them PEM-encoded,

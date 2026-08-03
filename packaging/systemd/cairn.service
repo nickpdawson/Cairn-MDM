@@ -1,6 +1,6 @@
 [Unit]
 Description=Cairn MDM server
-Documentation=https://github.com/dzsec/cairn-mdm
+Documentation=https://github.com/nickpdawson/cairn-mdm
 After=network-online.target
 Wants=network-online.target
 

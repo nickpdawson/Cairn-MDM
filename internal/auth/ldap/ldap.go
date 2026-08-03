@@ -24,8 +24,8 @@ import (
 
 	goldap "github.com/go-ldap/ldap/v3"
 
-	"github.com/dzsec/cairn-mdm/internal/auth"
-	"github.com/dzsec/cairn-mdm/internal/config"
+	"github.com/nickpdawson/cairn-mdm/internal/auth"
+	"github.com/nickpdawson/cairn-mdm/internal/config"
 )
 
 // Conn is the subset of the LDAP client the provider uses (injectable in

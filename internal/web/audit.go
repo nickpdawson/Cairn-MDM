@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
+	"github.com/nickpdawson/cairn-mdm/internal/storage/sqlite"
 )
 
 // statusRecorder wraps http.ResponseWriter to capture the response status code

@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"net/http"
 
-	"github.com/dzsec/cairn-mdm/internal/auth"
+	"github.com/nickpdawson/cairn-mdm/internal/auth"
 )
 
 // OIDCProvider is the narrow view of the OIDC login flow the web layer needs.

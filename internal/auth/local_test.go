@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
+	"github.com/nickpdawson/cairn-mdm/internal/storage/sqlite"
 )
 
 func testStore(t *testing.T) *LocalStore {

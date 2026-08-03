@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
 	"github.com/micromdm/nanomdm/mdm"
 	"github.com/micromdm/nanomdm/storage"
+	"github.com/nickpdawson/cairn-mdm/internal/storage/sqlite"
 )
 
 // memSource is an in-memory Source for tests.

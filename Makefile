@@ -1,5 +1,5 @@
 BINARY   := cairn
-PKG      := github.com/dzsec/cairn-mdm
+PKG      := github.com/nickpdawson/cairn-mdm
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT   ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 # Use the commit date (UTC, RFC3339) so builds are reproducible: the same

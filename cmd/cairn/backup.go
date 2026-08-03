@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/dzsec/cairn-mdm/internal/config"
+	"github.com/nickpdawson/cairn-mdm/internal/config"
 
 	_ "modernc.org/sqlite"
 )

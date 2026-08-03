@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dzsec/cairn-mdm/internal/config"
+	"github.com/nickpdawson/cairn-mdm/internal/config"
 )
 
 func TestThrottleLocksAfterMaxAttempts(t *testing.T) {

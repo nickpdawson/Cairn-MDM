@@ -43,11 +43,11 @@ first-class: you do not need an Apple Business Manager account to use Cairn.
 
 ```sh
 # One line: detect OS/arch, download the matching release, VERIFY its sha256, install.
-curl -fsSL https://raw.githubusercontent.com/dzsec/Cairn-MDM/main/packaging/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/nickpdawson/Cairn-MDM/main/packaging/install.sh | sh
 ```
 
 Or grab a release tarball / `.deb` / `.rpm` from the releases page, or run the
-container (`ghcr.io/dzsec/cairn-mdm`). Building from source: `go build ./cmd/cairn`
+container (`ghcr.io/nickpdawson/cairn-mdm`). Building from source: `go build ./cmd/cairn`
 (pure Go, `CGO_ENABLED=0`).
 
 ## Quick start

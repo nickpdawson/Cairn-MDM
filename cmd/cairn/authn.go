@@ -5,11 +5,11 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/dzsec/cairn-mdm/internal/auth"
-	ldapauth "github.com/dzsec/cairn-mdm/internal/auth/ldap"
-	oidcauth "github.com/dzsec/cairn-mdm/internal/auth/oidc"
-	"github.com/dzsec/cairn-mdm/internal/config"
-	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
+	"github.com/nickpdawson/cairn-mdm/internal/auth"
+	ldapauth "github.com/nickpdawson/cairn-mdm/internal/auth/ldap"
+	oidcauth "github.com/nickpdawson/cairn-mdm/internal/auth/oidc"
+	"github.com/nickpdawson/cairn-mdm/internal/config"
+	"github.com/nickpdawson/cairn-mdm/internal/storage/sqlite"
 )
 
 // buildAuthenticator assembles the login chain: external providers first,

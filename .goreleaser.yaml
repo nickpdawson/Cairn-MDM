@@ -21,9 +21,9 @@ builds:
     mod_timestamp: "{{ .CommitTimestamp }}"
     ldflags:
       - -s -w
-      - -X github.com/dzsec/cairn-mdm/internal/version.Version={{.Version}}
-      - -X github.com/dzsec/cairn-mdm/internal/version.Commit={{.ShortCommit}}
-      - -X github.com/dzsec/cairn-mdm/internal/version.Date={{.CommitDate}}
+      - -X github.com/nickpdawson/cairn-mdm/internal/version.Version={{.Version}}
+      - -X github.com/nickpdawson/cairn-mdm/internal/version.Commit={{.ShortCommit}}
+      - -X github.com/nickpdawson/cairn-mdm/internal/version.Date={{.CommitDate}}
     goos:
       - freebsd
       - linux
@@ -53,7 +53,7 @@ nfpms:
     maintainer: DZsec <security@dzsec.net>
     description: Single-binary Apple MDM server.
     license: MIT
-    homepage: https://github.com/dzsec/cairn-mdm
+    homepage: https://github.com/nickpdawson/cairn-mdm
     formats:
       - deb
       - rpm
@@ -70,13 +70,13 @@ nfpms:
 
 dockers:
   - image_templates:
-      - "ghcr.io/dzsec/cairn-mdm:{{ .Version }}"
-      - "ghcr.io/dzsec/cairn-mdm:latest"
+      - "ghcr.io/nickpdawson/cairn-mdm:{{ .Version }}"
+      - "ghcr.io/nickpdawson/cairn-mdm:latest"
     dockerfile: packaging/Dockerfile.goreleaser
     build_flag_templates:
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.source=https://github.com/dzsec/cairn-mdm"
+      - "--label=org.opencontainers.image.source=https://github.com/nickpdawson/cairn-mdm"
 
 checksum:
   name_template: "checksums.txt"

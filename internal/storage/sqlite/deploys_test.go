@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dzsec/cairn-mdm/internal/mdmcore"
+	"github.com/nickpdawson/cairn-mdm/internal/mdmcore"
 )
 
 func TestDeployQueries(t *testing.T) {

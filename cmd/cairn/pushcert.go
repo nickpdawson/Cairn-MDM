@@ -7,10 +7,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/dzsec/cairn-mdm/internal/config"
-	"github.com/dzsec/cairn-mdm/internal/push"
-	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
 	"github.com/micromdm/nanomdm/cryptoutil"
+	"github.com/nickpdawson/cairn-mdm/internal/config"
+	"github.com/nickpdawson/cairn-mdm/internal/push"
+	"github.com/nickpdawson/cairn-mdm/internal/storage/sqlite"
 )
 
 func runPushcert(ctx context.Context, args []string) error {

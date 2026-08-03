@@ -9,12 +9,12 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/dzsec/cairn-mdm/internal/ca"
-	"github.com/dzsec/cairn-mdm/internal/config"
-	"github.com/dzsec/cairn-mdm/internal/enroll"
-	"github.com/dzsec/cairn-mdm/internal/profile"
-	"github.com/dzsec/cairn-mdm/internal/push"
-	"github.com/dzsec/cairn-mdm/internal/server"
+	"github.com/nickpdawson/cairn-mdm/internal/ca"
+	"github.com/nickpdawson/cairn-mdm/internal/config"
+	"github.com/nickpdawson/cairn-mdm/internal/enroll"
+	"github.com/nickpdawson/cairn-mdm/internal/profile"
+	"github.com/nickpdawson/cairn-mdm/internal/push"
+	"github.com/nickpdawson/cairn-mdm/internal/server"
 )
 
 // wirePKI configures the SCEP and enrollment handlers according to ca.mode:

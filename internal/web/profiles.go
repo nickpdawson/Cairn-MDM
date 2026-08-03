@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dzsec/cairn-mdm/internal/profile"
-	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
+	"github.com/nickpdawson/cairn-mdm/internal/profile"
+	"github.com/nickpdawson/cairn-mdm/internal/storage/sqlite"
 )
 
 // maxProfileBytes bounds an uploaded .mobileconfig. Real profiles are a few KB;

@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/dzsec/cairn-mdm/internal/profile"
+	"github.com/nickpdawson/cairn-mdm/internal/profile"
 )
 
 // TopicProvider yields the current APNs topic (needed in the MDM payload).

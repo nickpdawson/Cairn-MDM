@@ -8,7 +8,7 @@ import (
 
 	"github.com/micromdm/nanomdm/mdm"
 
-	"github.com/dzsec/cairn-mdm/internal/mdmcore"
+	"github.com/nickpdawson/cairn-mdm/internal/mdmcore"
 )
 
 // stubService is a no-op inner NanoMDM service so the EventService decorator can

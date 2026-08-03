@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dzsec/cairn-mdm/internal/config"
-	"github.com/dzsec/cairn-mdm/internal/mdmcore"
-	"github.com/dzsec/cairn-mdm/internal/push"
-	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
-	"github.com/dzsec/cairn-mdm/internal/version"
 	"github.com/micromdm/nanomdm/mdm"
+	"github.com/nickpdawson/cairn-mdm/internal/config"
+	"github.com/nickpdawson/cairn-mdm/internal/mdmcore"
+	"github.com/nickpdawson/cairn-mdm/internal/push"
+	"github.com/nickpdawson/cairn-mdm/internal/storage/sqlite"
+	"github.com/nickpdawson/cairn-mdm/internal/version"
 )
 
 func runEnqueue(ctx context.Context, args []string) error {

@@ -3,15 +3,15 @@
 # GitHub, VERIFY its checksum against the published checksums.txt, and install
 # the binary. Refuses to proceed on a checksum mismatch.
 #
-#   curl -fsSL https://raw.githubusercontent.com/dzsec/Cairn-MDM/main/packaging/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/nickpdawson/Cairn-MDM/main/packaging/install.sh | sh
 #   # or pin a version:
 #   ... | sh -s -- v0.2.0
 #
 # Env overrides: CAIRN_VERSION, CAIRN_INSTALL_DIR (default /usr/local/bin),
-# CAIRN_REPO (default dzsec/Cairn-MDM).
+# CAIRN_REPO (default nickpdawson/Cairn-MDM).
 set -eu
 
-REPO="${CAIRN_REPO:-dzsec/Cairn-MDM}"
+REPO="${CAIRN_REPO:-nickpdawson/Cairn-MDM}"
 INSTALL_DIR="${CAIRN_INSTALL_DIR:-/usr/local/bin}"
 VERSION="${1:-${CAIRN_VERSION:-latest}}"
 

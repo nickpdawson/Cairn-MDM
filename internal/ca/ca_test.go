@@ -14,7 +14,7 @@ import (
 	scepdepot "github.com/micromdm/scep/v2/depot"
 	scep "github.com/smallstep/scep"
 
-	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
+	"github.com/nickpdawson/cairn-mdm/internal/storage/sqlite"
 )
 
 func testCA(t *testing.T) (*CA, *sqlite.DB) {
