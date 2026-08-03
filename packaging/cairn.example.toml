@@ -21,7 +21,7 @@ acme_email = "admin@example.org"
 # trusts for the real client IP (login throttling + audit attribution). Empty
 # (the default) trusts none and records the direct peer. Set this in proxy mode
 # so logs show clients, not the proxy. Example (NPM in front):
-# trusted_proxies = ["10.25.1.182"]
+# trusted_proxies = ["192.0.2.10"]
 
 [storage]
 driver = "sqlite"
