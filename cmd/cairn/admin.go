@@ -9,10 +9,10 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/dzsec/cairn/internal/auth"
-	"github.com/dzsec/cairn/internal/config"
-	"github.com/dzsec/cairn/internal/storage/sqlite"
-	"github.com/dzsec/cairn/internal/version"
+	"github.com/dzsec/cairn-mdm/internal/auth"
+	"github.com/dzsec/cairn-mdm/internal/config"
+	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
+	"github.com/dzsec/cairn-mdm/internal/version"
 )
 
 // runAdmin manages local console accounts: add, passwd, list, del.

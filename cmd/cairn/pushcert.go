@@ -7,9 +7,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/dzsec/cairn/internal/config"
-	"github.com/dzsec/cairn/internal/push"
-	"github.com/dzsec/cairn/internal/storage/sqlite"
+	"github.com/dzsec/cairn-mdm/internal/config"
+	"github.com/dzsec/cairn-mdm/internal/push"
+	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
 	"github.com/micromdm/nanomdm/cryptoutil"
 )
 

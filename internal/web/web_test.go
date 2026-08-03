@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dzsec/cairn/internal/auth"
-	"github.com/dzsec/cairn/internal/config"
-	"github.com/dzsec/cairn/internal/mdmcore"
-	"github.com/dzsec/cairn/internal/storage/sqlite"
+	"github.com/dzsec/cairn-mdm/internal/auth"
+	"github.com/dzsec/cairn-mdm/internal/config"
+	"github.com/dzsec/cairn-mdm/internal/mdmcore"
+	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
 )
 
 func testApp(t *testing.T) (*App, *auth.SessionStore, *sqlite.DB) {

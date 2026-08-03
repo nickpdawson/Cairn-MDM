@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dzsec/cairn/internal/config"
-	"github.com/dzsec/cairn/internal/version"
+	"github.com/dzsec/cairn-mdm/internal/config"
+	"github.com/dzsec/cairn-mdm/internal/version"
 )
 
 // Readiness reports whether backing dependencies are healthy. The storage layer

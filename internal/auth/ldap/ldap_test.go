@@ -10,8 +10,8 @@ import (
 
 	goldap "github.com/go-ldap/ldap/v3"
 
-	"github.com/dzsec/cairn/internal/auth"
-	"github.com/dzsec/cairn/internal/config"
+	"github.com/dzsec/cairn-mdm/internal/auth"
+	"github.com/dzsec/cairn-mdm/internal/config"
 )
 
 // fakeConn simulates a directory: a service account, one user, groups.

@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dzsec/cairn/internal/ca"
-	"github.com/dzsec/cairn/internal/profile"
-	"github.com/dzsec/cairn/internal/storage/sqlite"
+	"github.com/dzsec/cairn-mdm/internal/ca"
+	"github.com/dzsec/cairn-mdm/internal/profile"
+	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
 )
 
 func (a *App) handleBuilderWiFiForm(w http.ResponseWriter, r *http.Request) {

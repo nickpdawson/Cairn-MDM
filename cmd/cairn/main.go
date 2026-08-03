@@ -23,7 +23,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/dzsec/cairn/internal/version"
+	"github.com/dzsec/cairn-mdm/internal/version"
 )
 
 func main() {

@@ -10,7 +10,7 @@ import (
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
 
-	"github.com/dzsec/cairn/internal/config"
+	"github.com/dzsec/cairn-mdm/internal/config"
 )
 
 // configureTLS sets up the listener according to tls.mode and returns a function

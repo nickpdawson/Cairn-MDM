@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dzsec/cairn/internal/config"
+	"github.com/dzsec/cairn-mdm/internal/config"
 )
 
 func testServer(t *testing.T, ready Readiness) *Server {

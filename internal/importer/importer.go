@@ -17,7 +17,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/dzsec/cairn/internal/mdmcore"
+	"github.com/dzsec/cairn-mdm/internal/mdmcore"
 	"github.com/micromdm/nanomdm/cryptoutil"
 	"github.com/micromdm/nanomdm/mdm"
 	"github.com/micromdm/nanomdm/storage"

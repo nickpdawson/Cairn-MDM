@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dzsec/cairn/internal/config"
-	"github.com/dzsec/cairn/internal/importer"
-	"github.com/dzsec/cairn/internal/storage/sqlite"
-	"github.com/dzsec/cairn/internal/version"
+	"github.com/dzsec/cairn-mdm/internal/config"
+	"github.com/dzsec/cairn-mdm/internal/importer"
+	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
+	"github.com/dzsec/cairn-mdm/internal/version"
 )
 
 // runImport migrates a v1 NanoMDM MySQL deployment into Cairn's storage.

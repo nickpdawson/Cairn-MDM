@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dzsec/cairn/internal/config"
+	"github.com/dzsec/cairn-mdm/internal/config"
 )
 
 // renderTOML produces a readable cairn.toml reflecting the chosen options. It is

@@ -12,8 +12,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dzsec/cairn/internal/auth"
-	"github.com/dzsec/cairn/internal/storage/sqlite"
+	"github.com/dzsec/cairn-mdm/internal/auth"
+	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
 )
 
 //go:embed templates/*.html assets/*

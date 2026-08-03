@@ -1,4 +1,4 @@
-# Cairn
+# Cairn-MDM
 
 A single-binary, open-source Apple MDM server for homelabbers, small businesses,
 non-profits, and families.
@@ -11,8 +11,24 @@ Cairn manages macOS and iOS/iPadOS devices: over-the-air enrollment, an embedded
 polished, Apple-HIG-inspired web console — all in a single Go binary that runs
 natively on FreeBSD, Linux, and macOS, or in one container.
 
-**Status: early development (v0, pre-alpha).** Not yet ready for production.
-See [the design plan](docs/) for the roadmap.
+**Status: public beta (v0.x).** MIT-licensed and running a real fleet in
+production, but pre-1.0 — the config/API/schema may still change (migrations are
+provided) and some features are unfinished. Not yet "stable 1.0."
+
+### Known limitations (beta)
+
+- **Auth**: local + LDAP/AD + OIDC work; MFA and Kerberos/SPNEGO are not built.
+- **Apple scope**: OTA enrollment, SCEP, and profile delivery are complete.
+  Declarative Device Management (DDM) and ABM/ADE automated enrollment are on the
+  roadmap, not yet implemented.
+- **Console**: functional and server-rendered; not yet audited for mobile
+  responsiveness or WCAG accessibility.
+- **Scale**: SQLite (WAL) suits homelab/SMB fleets; MySQL/Postgres backends are
+  planned. Command delivery is durable at this scale but the full outbox/retry
+  design is a follow-up.
+
+See [the design plan](docs/) for the roadmap and [SECURITY.md](SECURITY.md) for
+the threat model and disclosure process.
 
 ## Why
 
@@ -27,11 +43,11 @@ first-class: you do not need an Apple Business Manager account to use Cairn.
 
 ```sh
 # One line: detect OS/arch, download the matching release, VERIFY its sha256, install.
-curl -fsSL https://raw.githubusercontent.com/dzsec/cairn/main/packaging/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/dzsec/Cairn-MDM/main/packaging/install.sh | sh
 ```
 
 Or grab a release tarball / `.deb` / `.rpm` from the releases page, or run the
-container (`ghcr.io/dzsec/cairn`). Building from source: `go build ./cmd/cairn`
+container (`ghcr.io/dzsec/cairn-mdm`). Building from source: `go build ./cmd/cairn`
 (pure Go, `CGO_ENABLED=0`).
 
 ## Quick start

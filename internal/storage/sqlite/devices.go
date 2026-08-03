@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"strings"
 
-	"github.com/dzsec/cairn/internal/mdmcore"
+	"github.com/dzsec/cairn-mdm/internal/mdmcore"
 )
 
 // Device is a row of the admin device inventory.

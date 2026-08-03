@@ -5,8 +5,8 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/dzsec/cairn/internal/config"
-	"github.com/dzsec/cairn/internal/storage/sqlite"
+	"github.com/dzsec/cairn-mdm/internal/config"
+	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
 )
 
 func runMigrate(ctx context.Context, args []string) error {

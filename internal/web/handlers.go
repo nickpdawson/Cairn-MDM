@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dzsec/cairn/internal/auth"
-	"github.com/dzsec/cairn/internal/push"
-	"github.com/dzsec/cairn/internal/storage/sqlite"
+	"github.com/dzsec/cairn-mdm/internal/auth"
+	"github.com/dzsec/cairn-mdm/internal/push"
+	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
 )
 
 // loginThrottles associates a *LoginThrottle with an App without adding a field

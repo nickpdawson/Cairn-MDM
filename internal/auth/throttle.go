@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dzsec/cairn/internal/config"
+	"github.com/dzsec/cairn-mdm/internal/config"
 )
 
 // LoginThrottle is an in-memory brute-force limiter keyed by an arbitrary string

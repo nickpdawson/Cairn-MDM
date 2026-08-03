@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/dzsec/cairn/internal/mdmcore"
+	"github.com/dzsec/cairn-mdm/internal/mdmcore"
 )
 
 // CommandEntry is a row of a device's command history.

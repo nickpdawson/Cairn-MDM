@@ -1,4 +1,4 @@
-module github.com/dzsec/cairn
+module github.com/dzsec/cairn-mdm
 
 go 1.26
 

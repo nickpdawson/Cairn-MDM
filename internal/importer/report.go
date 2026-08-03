@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dzsec/cairn/internal/version"
+	"github.com/dzsec/cairn-mdm/internal/version"
 )
 
 // Evidence is the machine-readable record of an import run, written to disk

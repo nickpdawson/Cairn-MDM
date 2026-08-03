@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dzsec/cairn/internal/storage/sqlite"
+	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
 )
 
 func (a *App) handleGroups(w http.ResponseWriter, r *http.Request) {

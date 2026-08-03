@@ -11,7 +11,7 @@ import (
 
 	qrcode "github.com/skip2/go-qrcode"
 
-	"github.com/dzsec/cairn/internal/storage/sqlite"
+	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
 )
 
 func (a *App) handleEnrollment(w http.ResponseWriter, r *http.Request) {

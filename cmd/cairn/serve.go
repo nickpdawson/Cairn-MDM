@@ -9,16 +9,16 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/dzsec/cairn/internal/assign"
-	"github.com/dzsec/cairn/internal/auth"
-	"github.com/dzsec/cairn/internal/config"
-	"github.com/dzsec/cairn/internal/enroll"
-	"github.com/dzsec/cairn/internal/mdmcore"
-	"github.com/dzsec/cairn/internal/push"
-	"github.com/dzsec/cairn/internal/server"
-	"github.com/dzsec/cairn/internal/storage/sqlite"
-	"github.com/dzsec/cairn/internal/version"
-	"github.com/dzsec/cairn/internal/web"
+	"github.com/dzsec/cairn-mdm/internal/assign"
+	"github.com/dzsec/cairn-mdm/internal/auth"
+	"github.com/dzsec/cairn-mdm/internal/config"
+	"github.com/dzsec/cairn-mdm/internal/enroll"
+	"github.com/dzsec/cairn-mdm/internal/mdmcore"
+	"github.com/dzsec/cairn-mdm/internal/push"
+	"github.com/dzsec/cairn-mdm/internal/server"
+	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
+	"github.com/dzsec/cairn-mdm/internal/version"
+	"github.com/dzsec/cairn-mdm/internal/web"
 )
 
 func runServe(ctx context.Context, args []string) error {

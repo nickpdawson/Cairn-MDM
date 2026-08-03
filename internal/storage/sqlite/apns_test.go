@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dzsec/cairn/internal/push"
+	"github.com/dzsec/cairn-mdm/internal/push"
 )
 
 // oidUID is the UserID attribute OID Apple stuffs the APNs topic into.

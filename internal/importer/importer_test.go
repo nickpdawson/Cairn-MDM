@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dzsec/cairn/internal/storage/sqlite"
+	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
 	"github.com/micromdm/nanomdm/mdm"
 	"github.com/micromdm/nanomdm/storage"
 )

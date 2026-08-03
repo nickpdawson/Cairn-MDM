@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dzsec/cairn/internal/auth"
+	"github.com/dzsec/cairn-mdm/internal/auth"
 )
 
 const testProfileXML = `<?xml version="1.0" encoding="UTF-8"?>

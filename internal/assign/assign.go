@@ -10,7 +10,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/dzsec/cairn/internal/storage/sqlite"
+	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
 )
 
 // Store is what the reconciler needs from storage.

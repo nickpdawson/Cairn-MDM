@@ -3,8 +3,8 @@ package oidc
 import (
 	"testing"
 
-	"github.com/dzsec/cairn/internal/auth"
-	"github.com/dzsec/cairn/internal/config"
+	"github.com/dzsec/cairn-mdm/internal/auth"
+	"github.com/dzsec/cairn-mdm/internal/config"
 )
 
 func mapCfg() config.OIDCCfg {

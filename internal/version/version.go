@@ -5,7 +5,7 @@ import "runtime"
 
 // These are set by the linker during release builds:
 //
-//	-ldflags "-X github.com/dzsec/cairn/internal/version.Version=v0.1.0 ..."
+//	-ldflags "-X github.com/dzsec/cairn-mdm/internal/version.Version=v0.1.0 ..."
 var (
 	Version = "dev"
 	Commit  = "none"

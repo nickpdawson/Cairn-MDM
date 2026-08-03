@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dzsec/cairn/internal/storage/sqlite"
+	"github.com/dzsec/cairn-mdm/internal/storage/sqlite"
 )
 
 func testSessionStore(t *testing.T) *SessionStore {
