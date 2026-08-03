@@ -25,3 +25,4 @@ cairn.toml
 *.test
 *.out
 .DS_Store
+/dist/

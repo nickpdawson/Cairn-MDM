@@ -40,11 +40,11 @@ archives:
       - NOTICE
       - README.md
       - src: packaging/cairn.example.toml
-        dst: .
+        dst: cairn.example.toml
       - src: packaging/systemd/cairn.service
-        dst: .
+        dst: contrib/systemd/cairn.service
       - src: packaging/rc.d/cairn
-        dst: .
+        dst: contrib/rc.d/cairn
 
 # Linux packages (deb/rpm) install the binary + systemd unit + example config.
 nfpms:
