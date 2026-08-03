@@ -9,6 +9,7 @@ import (
 	"embed"
 	"html/template"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
@@ -130,6 +131,13 @@ type Config struct {
 	SCEPURL       string   // device-identity SCEP endpoint
 	SCEPChallenge string   // its static challenge (may be empty)
 	CAAnchorsDER  [][]byte // Cairn's trust anchors (embedded CA cert or external chain)
+
+	// TrustedProxies lists reverse proxies (IP or CIDR) whose X-Forwarded-For
+	// header Cairn trusts for client-IP attribution. Empty = trust none: the
+	// direct peer is always used (correct for a direct listener). When Cairn
+	// sits behind NPM/nginx, list the proxy so login throttling and audit logs
+	// record the real client, not the proxy.
+	TrustedProxies []string
 }
 
 // App is the admin console.
@@ -148,16 +156,21 @@ type App struct {
 	rec        Reconciler   // may be nil (no auto-push)
 	oidc       OIDCProvider // may be nil (OIDC disabled); set via SetOIDC
 	cfg        Config
+	trusted    []*net.IPNet // parsed cfg.TrustedProxies; nil = trust no proxy
 	tmpl       *template.Template
 	log        *slog.Logger
 }
 
 // New builds the console. rec may be nil to disable assignment auto-push.
 func New(sessions *auth.SessionStore, authn Authenticator, store Store, cmd Commander, rec Reconciler, cfg Config, log *slog.Logger) (*App, error) {
+	trusted, err := parseTrustedProxies(cfg.TrustedProxies)
+	if err != nil {
+		return nil, err
+	}
 	a := &App{
 		sessions: sessions, auth: authn,
 		devices: store, settings: store, apnsTopics: store, profiles: store, groups: store, grants: store, audit: store, deploys: store,
-		cmd: cmd, rec: rec, cfg: cfg, log: log,
+		cmd: cmd, rec: rec, cfg: cfg, trusted: trusted, log: log,
 	}
 	// oidcEnabled lets the login template render the SSO button only when an
 	// OIDC provider has been installed. The closure reads a.oidc at render time,

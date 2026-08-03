@@ -2,7 +2,6 @@ package web
 
 import (
 	"context"
-	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -38,16 +37,6 @@ func (a *App) loginThrottle() *auth.LoginThrottle {
 		return v.(*auth.LoginThrottle)
 	}
 	return nil
-}
-
-// clientIP extracts the host portion of r.RemoteAddr (dropping the port). It
-// falls back to the raw RemoteAddr if it has no host:port shape.
-func clientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }
 
 // maxFormBytes bounds ordinary form POST bodies (login, group and builder
@@ -119,7 +108,7 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 	password := r.PostFormValue("password")
 
 	throttle := a.loginThrottle()
-	throttleKey := username + "|" + clientIP(r)
+	throttleKey := username + "|" + a.clientIP(r)
 	if throttle != nil {
 		if ok, retryAfter := throttle.Allowed(throttleKey); !ok {
 			a.log.Warn("login throttled", "username", username, "remote", r.RemoteAddr, "retry_after", retryAfter)

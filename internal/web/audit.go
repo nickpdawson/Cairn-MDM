@@ -69,7 +69,7 @@ func (a *App) audited(next http.Handler) http.Handler {
 			Action:   r.Method,
 			Target:   r.URL.Path,
 			Result:   strconv.Itoa(status),
-			Remote:   clientIP(r),
+			Remote:   a.clientIP(r),
 		}
 		if err := a.audit.AppendAudit(context.Background(), e); err != nil {
 			a.log.Error("audit append failed", "action", e.Action, "target", e.Target, "err", err)

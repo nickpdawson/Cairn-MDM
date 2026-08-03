@@ -103,11 +103,12 @@ func runServe(ctx context.Context, args []string) error {
 
 	console, err := web.New(sessions, authn, db, commander, reconciler,
 		web.Config{
-			PublicURL:     cfg.Server.PublicURL,
-			Organization:  pki.Org,
-			SCEPURL:       pki.SCEPURL,
-			SCEPChallenge: pki.Challenge,
-			CAAnchorsDER:  pki.Anchors,
+			PublicURL:      cfg.Server.PublicURL,
+			Organization:   pki.Org,
+			SCEPURL:        pki.SCEPURL,
+			SCEPChallenge:  pki.Challenge,
+			CAAnchorsDER:   pki.Anchors,
+			TrustedProxies: cfg.Server.TLS.TrustedProxies,
 		}, log)
 	if err != nil {
 		return err

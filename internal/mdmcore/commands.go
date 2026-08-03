@@ -39,19 +39,34 @@ func RemoveProfileCommand(identifier string) (*mdm.Command, error) {
 	})
 }
 
+// defaultDeviceInfoQueries is the broad, cross-platform set sent when a caller
+// asks for DeviceInformation without naming queries. Apple's current schema
+// marks Queries as required (a DeviceInformation with no Queries array is
+// rejected with CommandFormatError on strict clients), so Cairn never sends an
+// empty query. Platform-specific keys a device doesn't support are silently
+// omitted from its response, not errored.
+var defaultDeviceInfoQueries = []string{
+	"DeviceName", "Model", "ModelName", "ProductName", "OSVersion",
+	"BuildVersion", "SerialNumber", "DeviceCapacity", "AvailableDeviceCapacity",
+	"IsSupervised", "BatteryLevel", "WiFiMAC", "BluetoothMAC",
+}
+
 // DeviceInformationCommand builds a DeviceInformation query for the given
 // queries (e.g. "DeviceName", "OSVersion", "SerialNumber", "Model"). With no
-// queries Apple returns a default set.
+// queries it sends defaultDeviceInfoQueries — the Queries array is always
+// present and non-empty, as Apple requires.
 func DeviceInformationCommand(queries ...string) (*mdm.Command, error) {
-	inner := map[string]any{"RequestType": "DeviceInformation"}
-	if len(queries) > 0 {
-		q := make([]any, len(queries))
-		for i, s := range queries {
-			q[i] = s
-		}
-		inner["Queries"] = q
+	if len(queries) == 0 {
+		queries = defaultDeviceInfoQueries
 	}
-	return command(inner)
+	q := make([]any, len(queries))
+	for i, s := range queries {
+		q[i] = s
+	}
+	return command(map[string]any{
+		"RequestType": "DeviceInformation",
+		"Queries":     q,
+	})
 }
 
 // command marshals a command dict with a fresh CommandUUID and decodes it into

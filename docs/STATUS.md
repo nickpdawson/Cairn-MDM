@@ -92,17 +92,35 @@ Deferred follow-ups (documented, not cutover-blocking): full durable command
 outbox (claim/lease/retry), one-off install/remove-profile UI, versioned
 profiles + installed-vs-desired, per-serial migration tracker, `cairn backup` CLI.
 
+## Production cutover ✅ DONE 2026-07-31 (DZsec, soaking)
+Rehearsal (fail-closed importer) → live import into CT 226 (12 devices, 5 users,
+17 enrollments, 33 cert associations, 1 APNs cert; verify passed) → NPM host
+repoint → canary ping-all confirmed. Third-party post-cutover review (2026-08-03)
+returned: conversion PASS, keep Cairn live. Runbook:
+`~/Development/Notes/runbooks/cairn_dzsec_migration_20260731.md`. Migration
+exception recorded: 257 queued-but-undelivered v1 commands were intentionally
+abandoned (`-allow-pending`) — queued commands are not migrated by design; the
+fleet re-derives desired state from assignments. Soak in progress; v1 nanomdm
+held stopped-but-intact for rollback (repoint NPM back + `docker start nanomdm`).
+
+## Post-cutover fixes (2026-08-03, third-party review follow-ups) ✅
+- **DeviceInformation Queries** — Refresh now always sends a non-empty `Queries`
+  array (default cross-platform set); fixes `CommandFormatError` on strict
+  clients. `internal/mdmcore/commands.go`, test in `commands_test.go`.
+- **Trusted-proxy client IP** — `trusted_proxies` is now consumed: login
+  throttling and audit attribution resolve the real client via X-Forwarded-For
+  from trusted peers only (untrusted peers can't spoof). `internal/web/proxy.go`,
+  test in `proxy_test.go`.
+- **Backup** — nightly in-guest `cairn backup` systemd timer on CT 226 (14-copy
+  retention) + off-host copy; PBS job for CT 226 pending (Proxmox-side).
+
 ## Remaining
-- **Phase 2 polish (optional)** — DB-backed audit log (mutations currently get
-  structured slog entries with user attribution), live SSE command results,
-  "install/remove profile now" one-off actions from the device page.
-- **Done since the gate**: `cairn import -from-mysql` with always-on
-  verification (replay-based, zero re-enrollment; docs/migrating-from-nanomdm.md);
-  `cairn admin` account CLI; `cairn pushcert request/decrypt` (mdmcert.download
-  wizard, proven against the live service); LDAP/AD auth provider + chain with
-  explicit group→role mapping (live-verified against a real DC over LDAPS);
-  `cairn admin testauth`.
-- **Phase 3 remainder** — production cutover itself (rehearsal → NPM repoint →
-  ping-all; operator-driven), trusted-proxy header auth.
-- **Phase 4+** — OIDC + Kerberos/SPNEGO providers, MySQL/Postgres app storage,
-  Prometheus metrics, DDM, ABM/ADE, packaging polish.
+- **Phase 2 polish (optional)** — live SSE command results, "install/remove
+  profile now" one-off actions from the device page.
+- **Soak wrap-up** — remaining migrated devices to first check-in or retire;
+  then v1 teardown (secret rotation, lock down maverick MySQL 3306, stop
+  mdm-admin :8081).
+- **OIDC** — authorization-code flow implemented (`internal/auth/oidc`,
+  `/auth/oidc/login` + `/callback`); live-verify against Authentik outstanding.
+- **Phase 4+** — Kerberos/SPNEGO provider, MySQL/Postgres app storage,
+  Prometheus metrics, DDM, ABM/ADE.

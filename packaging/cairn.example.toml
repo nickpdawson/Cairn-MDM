@@ -17,6 +17,11 @@ mode = "acme"
 acme_email = "admin@example.org"
 # cert_file = "/etc/cairn/tls.crt"   # files mode
 # key_file  = "/etc/cairn/tls.key"
+# trusted_proxies — reverse proxies (IP or CIDR) whose X-Forwarded-For Cairn
+# trusts for the real client IP (login throttling + audit attribution). Empty
+# (the default) trusts none and records the direct peer. Set this in proxy mode
+# so logs show clients, not the proxy. Example (NPM in front):
+# trusted_proxies = ["10.25.1.182"]
 
 [storage]
 driver = "sqlite"
