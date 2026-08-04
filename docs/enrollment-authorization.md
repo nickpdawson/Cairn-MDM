@@ -114,6 +114,25 @@ Prefer **broker over embedded** wherever a PKI exists — don't put a signing ke
 an internet-adjacent MDM host. The embedded CA is a deliberate, security-load-
 bearing choice, not a frictionless default.
 
+## Who authorizes the identity — self-service (primary model)
+
+The name on the certificate is decided when the **grant** is created; the device
+can never assert its own. The strongest way to decide "who gets a grant for owner
+X" is to make the **enrolling user prove they are X**:
+
+- **Self-service (default):** the user authenticates to Cairn (AD/OIDC, ideally
+  MFA) and the grant is bound to **their own authenticated identity** — the owner
+  SAN is *self-proven*, not asserted by a third party. The person putting a name
+  on the badge is the person who proved they hold that name.
+- **Operator-assigned (fallback):** an operator creates an owner-bound grant for
+  someone else — needed for bootstrap, loaner/shared devices, or (later)
+  user-less devices. This is a more privileged action and carries stricter
+  controls and audit, precisely because the identity is *asserted*, not proven.
+
+Either way the owner value is a real, verifiable directory identity (validated at
+grant creation), single-use and expiring, and the device's requested identity is
+discarded (rule 1).
+
 ## Cairn is a highly-privileged enrollment authority
 
 Because a compromised authority can issue in-namespace identities (impersonation),
