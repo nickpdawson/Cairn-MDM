@@ -38,14 +38,32 @@ never copied from, or merely compared against, the CSR. Comparing
 `otherName` identities, extra extensions, encoding tricks, and alternate subjects.
 Discard the device's requested fields.
 
-### 2. Separate, atomic state transitions
-Profile *delivery* and certificate *issuance* are distinct. **Consuming a grant at
-profile download must not leave a reusable issuance credential.** The
-authorization to *issue* is a separate, single-use token consumed atomically at
-CSR time and **bound to the fingerprint of the presented public key** (so a
-captured authorization can't be replayed with a different key). Exactly one
-issuance wins a race; the result records the certificate serial, closing a
-**grant → CSR → certificate** audit chain.
+### 2. Separate, atomic, idempotent state transitions
+Profile *delivery*, certificate *issuance*, and *renewal* are distinct.
+**Consuming a grant at profile download must not leave a reusable issuance
+credential.** The authorization to *issue* is a separate, single-use token
+consumed atomically at CSR time and **bound to the fingerprint of the presented
+public key** (so a captured authorization can't be replayed with a different key).
+
+Issuance must be **idempotent under SCEP retries and ambiguous CA responses** —
+moving straight from "profile served" to "issued" risks either double-issuance or
+permanently burning a grant when the CA times out. Introduce an **ISSUING** state
+that records the SCEP transaction id, public-key fingerprint, and request hash:
+an identical retry returns PENDING or the cached certificate; a different request
+on the same grant fails; a CA timeout keeps the transaction recoverable (poll by
+transaction id) rather than lost. `ISSUED` records the certificate serial,
+closing a **grant → CSR → certificate** audit chain.
+
+### 2a. Renewal
+Short lifetimes demand a reliable renewal path — and short lifetimes cannot
+compensate for an unreliable one. Renewal authenticates with the **existing
+device certificate** (not a new grant), the server **re-derives the authoritative
+owner** at renewal time (never carried from the old cert), and renewal is
+**rejected** if the credential is revoked/expired or the owner is no longer
+eligible. A device that misses its renewal window falls back to a fresh
+owner-bound grant (a new enrollment). Lifetimes should start conservative
+(e.g. ~60 days, renewing at ~30) and tighten only after a renewal + offline-device
+soak.
 
 ## Two modes
 
@@ -60,11 +78,18 @@ NDES+Intune-connector / Jamf-SCEP-proxy pattern.
 
 The CA must **independently constrain every issuance** (defense in depth): a
 dedicated profile + issuing CA, `clientAuth`-only EKU, `basicConstraints
-CA:FALSE`, short fixed validity, namespace/name constraints, and preferably a
-**policy OID** so consumers can *require* "broker-issued". The backend should
-independently refuse a double/unauthorized issuance — e.g. via a Cairn-signed,
-short-TTL, key-bound authorization token validated at the CA (stateless), or a
-per-transaction record the CA burns.
+CA:FALSE`, short fixed validity, namespace/name constraints, and a **policy OID**
+so consumers can *require* "broker-issued" — and verify the relying party
+(e.g. RADIUS) actually **enforces** the OID, not merely the issuer. The issued
+certificate carries **exactly one canonical `rfc822Name`**; the device's requested
+SANs/subject/extensions are dropped. The backend must independently refuse a
+double/unauthorized issuance — e.g. a Cairn-signed, short-TTL, key-bound
+authorization token validated at the CA (stateless, with strict canonical
+encoding + an HSM-protected signing key + a nonce ledger), or a per-transaction
+record the CA atomically creates-and-burns. Both **prevent replay and constrain
+issuance but do not make the CA independent of a *fully compromised* Cairn** — a
+compromised broker can still authorize arbitrary in-namespace identities, which is
+why the operational controls below are mandatory, not optional.
 
 > Name constraints bound the **namespace**; they do **not** stop a compromised
 > broker from impersonating another identity *within* it. See operational
