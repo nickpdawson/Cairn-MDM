@@ -11,8 +11,13 @@ internet-open enrollment until Stage 1 gates pass.
 The **user-attributed one-time enrollment grant** is the keystone. It is
 simultaneously:
 
-- the review's #1 P0 security fix (kills the reusable public /enroll + static
-  challenge), and
+- the review's #1 P0 security fix (kills the reusable public /enroll and gates
+  profile delivery). **Correction (2026-08-03):** the grant does *not* by itself
+  kill the static SCEP challenge or gate certificate *issuance* — in external
+  mode the CA is the issuance authority and a leaked/shared challenge can still
+  mint certs directly. Bound one-time issuance (Cairn owns enrollment
+  authorization; embedded-issue or SCEP broker) is a separate, still-open gate;
+  see `SECURITY.md` and the enrollment-authorization design. And
 - the thing that puts a per-device serial + owner identity into the SCEP cert,
   which is the prerequisite for EAP-TLS live AD authorization.
 

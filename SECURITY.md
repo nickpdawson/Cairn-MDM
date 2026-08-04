@@ -45,9 +45,27 @@ commands to managed devices. The main boundaries it defends:
   "admin". Sessions are DB-backed with hashed tokens in a `__Host-` cookie;
   mutating routes require a CSRF token and same-origin; logins are throttled and
   rate-limited; all mutations are audited.
-- **Device enrollment.** Enrollment requires a single-use, expiring grant
-  (`/e/{token}`); the bare `/enroll` is default-denied. Profiles are CMS-signed.
-  The SCEP challenge is never served without a valid grant.
+- **Device enrollment (profile delivery).** Delivery of the enrollment profile
+  requires a single-use, expiring grant (`/e/{token}`); the bare `/enroll` is
+  default-denied; profiles are CMS-signed. **Scope caveat:** a grant gates
+  *profile delivery*, not certificate *issuance*. In the embedded CA modes Cairn
+  signs the device cert itself and (target design) binds its identity to the
+  grant. In **external** CA mode, issuance is delegated to your CA and
+  authenticated by that CA's SCEP challenge — the grant does not itself gate the
+  CA. Operators using external mode must protect and rotate the SCEP challenge
+  and restrict the CA's SCEP endpoint. **Bound, one-time issuance (Cairn as the
+  authorizing authority for each enrollment) is a v1.0 security gate.** Until
+  issuance is Cairn-controlled (embedded-issue or a SCEP broker in front of an
+  external CA), a device identity certificate should **not** be relied on as a
+  network-access credential (e.g. EAP-TLS), because its subject/SAN is not yet
+  guaranteed to be authority-attested.
+- **Certificate authority (embedded modes).** Running `generate`/`import` means
+  you are operating a CA. Best practice is a two-tier CA with the **root kept
+  offline** (exported and stored off the host, ideally on an HSM/PIV token) and
+  only an issuing key online; plan issuer/root rollover. The embedded CA is a
+  deliberate, security-load-bearing choice, not a frictionless default — if you
+  have an existing PKI, prefer external/broker so the signing key never lives on
+  the MDM host.
 - **Device check-in (`/mdm`).** Every request is authenticated by the device's
   identity certificate (SCEP-issued) via `Mdm-Signature`/mTLS; certauth binds
   each enrollment to its certificate hash(es).

@@ -115,6 +115,15 @@ held stopped-but-intact for rollback (repoint NPM back + `docker start nanomdm`)
   retention) + off-host copy; PBS job for CT 226 pending (Proxmox-side).
 
 ## Remaining
+- **Open security gate — enrollment issuance trust (v1.0).** Grants gate profile
+  delivery, not certificate *issuance*; in external mode the CA authenticates on
+  its own SCEP challenge, so a device cert's subject/SAN is not yet
+  authority-attested. **Cairn must own enrollment authorization** — embedded
+  one-time issuance, or a SCEP **broker** in front of an external CA (Cairn
+  validates the grant, stamps the SAN, relays with a server-side credential).
+  Until then, do **not** trust device certs as a network-access credential
+  (EAP-TLS). See `SECURITY.md` and the enrollment-authorization design. This is
+  the v1.0 "one-time SCEP challenges" roadmap item, now scoped concretely.
 - **Phase 2 polish (optional)** — live SSE command results, "install/remove
   profile now" one-off actions from the device page.
 - **Soak wrap-up** — remaining migrated devices to first check-in or retire;

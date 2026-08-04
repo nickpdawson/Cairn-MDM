@@ -11,9 +11,14 @@ Cairn manages macOS and iOS/iPadOS devices: over-the-air enrollment, an embedded
 polished, Apple-HIG-inspired web console — all in a single Go binary that runs
 natively on FreeBSD, Linux, and macOS, or in one container.
 
-**Status: public beta (v0.x).** MIT-licensed and running a real fleet in
-production, but pre-1.0 — the config/API/schema may still change (migrations are
-provided) and some features are unfinished. Not yet "stable 1.0."
+**Status: public beta (v0.x).** MIT-licensed and running its author's own fleet,
+but pre-1.0 and at the operator's own risk — not production-ready for others yet
+(`SECURITY.md` treats v0 as experimental with best-effort fixes only). The
+config/API/schema may still change (migrations are provided), some features are
+unfinished, and there is a **known pre-1.0 security gate in enrollment issuance
+trust** — device certs are not yet authority-attested, so don't rely on them as a
+network-access credential (EAP-TLS) until issuance is Cairn-controlled. See
+`SECURITY.md`.
 
 ### Known limitations (beta)
 
@@ -53,8 +58,10 @@ container (`ghcr.io/nickpdawson/cairn-mdm`). Building from source: `go build ./c
 ## Quick start
 
 ```sh
-# One command sets up config, the CA, and the admin account, and prints the
-# enrollment URL. It never surfaces PKI decisions unless you opt into them.
+# One command sets up config, a CA (self-signed by default), and the admin
+# account, and prints the enrollment URL. Note: running your own CA is a real
+# security decision (offline root, rollover — see SECURITY.md); if you already
+# have a PKI, prefer external mode so the signing key never lives on this host.
 cairn init --public-url https://mdm.example.org
 
 # Then load an APNs push certificate (free via mdmcert.download) and serve:
