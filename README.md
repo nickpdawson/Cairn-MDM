@@ -82,9 +82,12 @@ association intact before declaring success. See
 
 ## Roadmap
 
-- **v1.0** — redesigned OTA enrollment (one-time SCEP challenges, expiring
-  links, QR, signed profiles), embedded + external CA, APNs cert wizard, device
-  inventory, profile library, Kerberos SSO template.
+- **v1.0** — redesigned OTA enrollment with Cairn as the enrollment authority
+  (one-time, key-bound issuance; reconstruct-don't-validate; broker in front of
+  an external CA or embedded-issue with an offline root — see
+  [docs/enrollment-authorization.md](docs/enrollment-authorization.md)), expiring
+  links, QR, signed profiles, APNs cert wizard, device inventory, profile
+  library, Kerberos SSO template.
 - **v1.1** — Declarative Device Management (software-update enforcement, status
   subscriptions).
 - **v1.2** — ABM/ADE automated enrollment (optional module).

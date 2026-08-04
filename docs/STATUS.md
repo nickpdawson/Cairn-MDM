@@ -122,8 +122,11 @@ held stopped-but-intact for rollback (repoint NPM back + `docker start nanomdm`)
   one-time issuance, or a SCEP **broker** in front of an external CA (Cairn
   validates the grant, stamps the SAN, relays with a server-side credential).
   Until then, do **not** trust device certs as a network-access credential
-  (EAP-TLS). See `SECURITY.md` and the enrollment-authorization design. This is
-  the v1.0 "one-time SCEP challenges" roadmap item, now scoped concretely.
+  (EAP-TLS). Design: `docs/enrollment-authorization.md` (reconstruct-don't-
+  validate, atomic issuance-time grant consumption, broker vs embedded-issue, CA
+  key ceremony, end-to-end fail-closed revocation). This is the v1.0 "one-time
+  SCEP challenges" roadmap item, now scoped concretely; validate with an
+  independent red/blue engagement before production.
 - **Phase 2 polish (optional)** — live SSE command results, "install/remove
   profile now" one-off actions from the device page.
 - **Soak wrap-up** — remaining migrated devices to first check-in or retire;
